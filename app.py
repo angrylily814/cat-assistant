@@ -2243,7 +2243,7 @@ def kill_port_process(port: int):
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("PORT", 8001))
+    port = int(os.environ.get("PORT", 8000))
 
     # Windows 本地开发：自动释放被占用的端口
     if sys.platform == 'win32':
