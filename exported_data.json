@@ -1,0 +1,543 @@
+{
+  "cat_info": [
+    {
+      "id": 1,
+      "name": "顺顺",
+      "birthday": "2025-01-10",
+      "created_at": "2026-05-22 16:34:52",
+      "bio": "冷脸萌，晚上爱跑酷，喜欢猫抓板，爱梳毛",
+      "status": "减肥中"
+    }
+  ],
+  "context_settings": [],
+  "events": [
+    {
+      "id": 1,
+      "type": "vaccine",
+      "date": "2026-04-28",
+      "next_due_date": "2026-05-26",
+      "notes": "猫三联疫苗"
+    },
+    {
+      "id": 2,
+      "type": "vaccine",
+      "date": "2026-05-25",
+      "next_due_date": "2027-05-25",
+      "notes": "猫三联疫苗，萌悦家宠物医院"
+    },
+    {
+      "id": 3,
+      "type": "vaccine",
+      "date": "2026-05-26",
+      "next_due_date": "2027-05-26",
+      "notes": "萌悦家宠物医院，猫三联疫苗，费用76元"
+    },
+    {
+      "id": 4,
+      "type": "deworm",
+      "date": "2026-04-18",
+      "next_due_date": "2026-07-18",
+      "notes": "大宠爱+海乐妙"
+    },
+    {
+      "id": 5,
+      "type": "vaccine",
+      "date": "2026-05-26",
+      "next_due_date": "2026-06-23",
+      "notes": "猫三联第二针疫苗，第三针安排在6月23日"
+    },
+    {
+      "id": 6,
+      "type": "deworm",
+      "date": "2026-05-27",
+      "next_due_date": "2026-05-30",
+      "notes": "三天后驱虫提醒"
+    }
+  ],
+  "expenses": [
+    {
+      "id": 1,
+      "date": "2026-05-22",
+      "category": "猫粮",
+      "brand": "宽幅",
+      "amount": 7.74,
+      "notes": "500g"
+    },
+    {
+      "id": 2,
+      "date": "2026-05-22",
+      "category": "猫粮",
+      "brand": "海洋之星",
+      "amount": 9.81,
+      "notes": "200g"
+    },
+    {
+      "id": 3,
+      "date": "2026-05-22",
+      "category": "猫粮",
+      "brand": "皇家",
+      "amount": 8.42,
+      "notes": "100g"
+    },
+    {
+      "id": 4,
+      "date": "2026-05-22",
+      "category": "猫粮",
+      "brand": "荒野盛宴",
+      "amount": 19.9,
+      "notes": "300g"
+    },
+    {
+      "id": 5,
+      "date": "2026-05-22",
+      "category": "猫砂",
+      "brand": "尤品滋",
+      "amount": 44.3,
+      "notes": "2.4Kg×4"
+    },
+    {
+      "id": 6,
+      "date": "2026-05-22",
+      "category": "用品",
+      "brand": "费洛蒙",
+      "amount": 42.88,
+      "notes": "防应激猫咪喷雾 50ml"
+    },
+    {
+      "id": 13,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "宽幅",
+      "amount": 19.9,
+      "notes": "600g"
+    },
+    {
+      "id": 14,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "阿飞与巴弟",
+      "amount": 7.85,
+      "notes": "300g"
+    },
+    {
+      "id": 15,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "诚实一口",
+      "amount": 20.7,
+      "notes": "450g"
+    },
+    {
+      "id": 16,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "蓝氏",
+      "amount": 9.9,
+      "notes": "200g"
+    },
+    {
+      "id": 17,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "诚实一口",
+      "amount": 6.9,
+      "notes": "150g"
+    },
+    {
+      "id": 18,
+      "date": "2026-04-22",
+      "category": "猫粮",
+      "brand": "阿飞与巴弟",
+      "amount": 9.9,
+      "notes": "250g"
+    },
+    {
+      "id": 19,
+      "date": "2026-04-22",
+      "category": "零食",
+      "brand": "麦富迪",
+      "amount": 19.8,
+      "notes": "宠物礼包（猫粮+猫条+罐头+零食）"
+    },
+    {
+      "id": 20,
+      "date": "2026-04-22",
+      "category": "零食",
+      "brand": "领先",
+      "amount": 22.9,
+      "notes": "宠物礼包（猫粮+猫条+罐头+零食）"
+    },
+    {
+      "id": 21,
+      "date": "2026-04-22",
+      "category": "零食",
+      "brand": "小壳",
+      "amount": 20.5,
+      "notes": "羊奶冻干45g"
+    },
+    {
+      "id": 22,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 10.7,
+      "notes": "猫抓板"
+    },
+    {
+      "id": 23,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 9.53,
+      "notes": "伊丽莎白圈"
+    },
+    {
+      "id": 24,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 4.74,
+      "notes": "猫梳子"
+    },
+    {
+      "id": 25,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 37.5,
+      "notes": "猫包"
+    },
+    {
+      "id": 26,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 10.58,
+      "notes": "牵引绳"
+    },
+    {
+      "id": 27,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 10.49,
+      "notes": "猫砂铲"
+    },
+    {
+      "id": 28,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 6.32,
+      "notes": "宠物免洗手套湿巾8片"
+    },
+    {
+      "id": 29,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 9.6,
+      "notes": "猫碗"
+    },
+    {
+      "id": 30,
+      "date": "2026-04-22",
+      "category": "猫砂",
+      "brand": "尤品滋",
+      "amount": 52.2,
+      "notes": "2.4Kg×4"
+    },
+    {
+      "id": 31,
+      "date": "2026-04-22",
+      "category": "玩具",
+      "brand": "逗猫棒",
+      "amount": 8.64,
+      "notes": null
+    },
+    {
+      "id": 32,
+      "date": "2026-04-22",
+      "category": "玩具",
+      "brand": "不倒翁转盘",
+      "amount": 9.91,
+      "notes": null
+    },
+    {
+      "id": 33,
+      "date": "2026-04-22",
+      "category": "医疗",
+      "brand": "大宠爱+海乐妙",
+      "amount": 51.3,
+      "notes": "驱虫：大宠爱1支+海乐妙1支"
+    },
+    {
+      "id": 34,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 14.3,
+      "notes": "宠物垃圾袋"
+    },
+    {
+      "id": 35,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 52.92,
+      "notes": "猫砂盆"
+    },
+    {
+      "id": 36,
+      "date": "2026-04-22",
+      "category": "用品",
+      "brand": "其他",
+      "amount": 15.7,
+      "notes": "竖版猫抓板"
+    },
+    {
+      "id": 85,
+      "date": "2026-05-25",
+      "category": "医疗",
+      "brand": null,
+      "amount": 34.75,
+      "notes": "顺顺每月宠物医保"
+    },
+    {
+      "id": 88,
+      "date": "2026-04-22",
+      "category": "医疗",
+      "brand": "萌悦家宠物医院",
+      "amount": 76.0,
+      "notes": "猫三联疫苗"
+    },
+    {
+      "id": 89,
+      "date": "2026-05-26",
+      "category": "医疗",
+      "brand": "猫咪洁齿水",
+      "amount": 33.0,
+      "notes": null
+    },
+    {
+      "id": 90,
+      "date": "2026-05-26",
+      "category": "医疗",
+      "brand": "口腔清洁棉棒",
+      "amount": 16.71,
+      "notes": null
+    },
+    {
+      "id": 92,
+      "date": "2026-05-28",
+      "category": "猫粮",
+      "brand": "皇家",
+      "amount": 27.0,
+      "notes": "400g"
+    }
+  ],
+  "inventory": [
+    {
+      "id": 1,
+      "item_name": "皇家猫粮",
+      "category": "猫粮",
+      "quantity": 10.0,
+      "threshold": 2.0,
+      "unit": "kg",
+      "notes": "新购入一大袋"
+    }
+  ],
+  "photos": [
+    {
+      "id": 1,
+      "filename": "avatar.jpg",
+      "original_name": "avatar.jpg",
+      "upload_date": "2026-05-25",
+      "file_size_kb": 361.7,
+      "notes": null
+    },
+    {
+      "id": 2,
+      "filename": "cat_20260525_144931.jpg",
+      "original_name": "cat_20260525_144931.jpg",
+      "upload_date": "2026-05-25",
+      "file_size_kb": 3142.9,
+      "notes": null
+    },
+    {
+      "id": 3,
+      "filename": "cat_20260525_150126.jpg",
+      "original_name": "cat_20260525_150126.jpg",
+      "upload_date": "2026-05-25",
+      "file_size_kb": 2644.0,
+      "notes": null
+    },
+    {
+      "id": 5,
+      "filename": "cat_20260525_172203.jpg",
+      "original_name": "顺顺可爱大头照2.jpg",
+      "upload_date": "2026-05-25",
+      "file_size_kb": 2723.1,
+      "notes": null
+    },
+    {
+      "id": 6,
+      "filename": "cat_20260526_095851.jpg",
+      "original_name": "IMG_20260506_172521.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 3342.9,
+      "notes": null
+    },
+    {
+      "id": 7,
+      "filename": "cat_20260526_102428.jpg",
+      "original_name": "IMG_20260520_204355.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 847.0,
+      "notes": null
+    },
+    {
+      "id": 8,
+      "filename": "cat_20260526_102442.jpg",
+      "original_name": "IMG_20260520_201147.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 883.4,
+      "notes": null
+    },
+    {
+      "id": 9,
+      "filename": "cat_20260526_102454.jpg",
+      "original_name": "IMG_20260525_234730.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 931.6,
+      "notes": null
+    },
+    {
+      "id": 10,
+      "filename": "cat_20260526_102508.jpg",
+      "original_name": "IMG_20260525_230722.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 803.8,
+      "notes": null
+    },
+    {
+      "id": 11,
+      "filename": "cat_20260526_102514.jpg",
+      "original_name": "IMG_20260525_204416.jpg",
+      "upload_date": "2026-05-26",
+      "file_size_kb": 811.7,
+      "notes": null
+    },
+    {
+      "id": 12,
+      "filename": "cat_20260528_163318.jpg",
+      "original_name": "微信图片_20260528162725_900_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 184.7,
+      "notes": null
+    },
+    {
+      "id": 13,
+      "filename": "cat_20260528_163325.jpg",
+      "original_name": "微信图片_20260528162727_901_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2142.3,
+      "notes": null
+    },
+    {
+      "id": 14,
+      "filename": "cat_20260528_163332.jpg",
+      "original_name": "微信图片_20260528162730_902_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2048.0,
+      "notes": null
+    },
+    {
+      "id": 15,
+      "filename": "cat_20260528_163336.jpg",
+      "original_name": "微信图片_20260528162746_903_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2015.0,
+      "notes": null
+    },
+    {
+      "id": 16,
+      "filename": "cat_20260528_163340.jpg",
+      "original_name": "微信图片_20260528162747_904_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2628.6,
+      "notes": null
+    },
+    {
+      "id": 17,
+      "filename": "cat_20260528_163346.jpg",
+      "original_name": "微信图片_20260528162749_905_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2317.3,
+      "notes": null
+    },
+    {
+      "id": 18,
+      "filename": "cat_20260528_163349.jpg",
+      "original_name": "微信图片_20260528162752_906_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 3567.4,
+      "notes": null
+    },
+    {
+      "id": 22,
+      "filename": "cat_20260528_163738_1.jpg",
+      "original_name": "微信图片_20260528162800_907_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 3570.8,
+      "notes": null
+    },
+    {
+      "id": 23,
+      "filename": "cat_20260528_163738_2.jpg",
+      "original_name": "微信图片_20260528162802_908_71.jpg",
+      "upload_date": "2026-05-28",
+      "file_size_kb": 2822.1,
+      "notes": null
+    }
+  ],
+  "toys": [
+    {
+      "id": 1,
+      "name": "黑色鞋带",
+      "preference": "like",
+      "last_used_date": "2026-05-26",
+      "notes": "喜欢黑死细长条的东西，比如妈妈的黑色鞋带"
+    },
+    {
+      "id": 2,
+      "name": "逗猫棒",
+      "preference": "neutral",
+      "last_used_date": "2026-05-26",
+      "notes": "无感，不感兴趣"
+    },
+    {
+      "id": 3,
+      "name": "猫抓板",
+      "preference": "like",
+      "last_used_date": "2026-05-26",
+      "notes": "喜欢猫抓板"
+    }
+  ],
+  "weight_records": [
+    {
+      "id": 1,
+      "date": "2026-04-28",
+      "weight": 4.0,
+      "photo_path": null,
+      "notes": "第一针疫苗时在医院测量"
+    },
+    {
+      "id": 2,
+      "date": "2026-05-26",
+      "weight": 4.4,
+      "photo_path": null,
+      "notes": ""
+    }
+  ]
+}

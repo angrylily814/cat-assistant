@@ -1,6 +1,10 @@
 # SQLite database (contains user data, don't commit)
 *.db
 
+# Data export/import
+exported_data.json
+.imported_done
+
 # Python
 __pycache__/
 *.py[cod]
@@ -33,12 +37,10 @@ _fix_*.py
 _restart.py
 _check_*.py
 _verify_*.py
-# Vue项目需要忽略的文件和文件夹
+
+# Vue / Node
 node_modules/
 dist/
-.DS_Store
 *.log
 .env.local
 .env.*.local
-.vscode/
-.idea/
