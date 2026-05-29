@@ -1,0 +1,44 @@
+# SQLite database (contains user data, don't commit)
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment / secrets
+api_key.txt
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploaded user data (stored in data/ or D:\cat-assistant-data\)
+data/
+uploads/
+
+# Claude
+.claude/
+
+# Test scripts
+_test_*.py
+_diagnose*.py
+_fix_*.py
+_restart.py
+_check_*.py
+_verify_*.py
+# Vue项目需要忽略的文件和文件夹
+node_modules/
+dist/
+.DS_Store
+*.log
+.env.local
+.env.*.local
+.vscode/
+.idea/

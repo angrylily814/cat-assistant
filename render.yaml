@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: cat-assistant
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: DEEPSEEK_API_KEY
+        sync: false
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1

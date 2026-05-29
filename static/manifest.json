@@ -1,0 +1,16 @@
+{
+  "name": "猫咪私人助理",
+  "short_name": "猫咪助理",
+  "description": "智能养猫管理工具",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fef9ef",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/photos/avatar.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    }
+  ]
+}

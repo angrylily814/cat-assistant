@@ -1,0 +1,2527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🐱 猫咪私人助理</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #fef9ef;
+  --card: #ffffff;
+  --primary: #f97316;
+  --primary-light: #ffedd5;
+  --text: #1c1917;
+  --sub: #78716c;
+  --border: #e7e5e4;
+  --success: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --bubble-user: #f97316;
+  --bubble-cat: #f5f5f4;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --radius: 16px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Notification prompt bar */
+.notify-prompt {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--primary);
+  font-size: 0.9rem;
+  color: var(--primary);
+  font-weight: 500;
+  animation: slideDown .35s ease;
+  flex-shrink: 0;
+}
+.notify-prompt.show { display: flex; }
+.notify-prompt .notify-prompt-text { flex: 1; }
+.notify-prompt button {
+  border: none;
+  border-radius: 16px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.notify-prompt .notify-enable-btn { background: var(--primary); color: white; }
+.notify-prompt .notify-enable-btn:active { transform: scale(.95); }
+.notify-prompt .notify-dismiss-btn { background: transparent; color: var(--sub); font-size: 1.1rem; padding: 4px 8px; }
+@keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeInUp { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+/* Header */
+.header {
+  background: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+.header .logo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header .logo .icon { font-size: 1.6rem; }
+.header .actions { display:flex; gap:8px; }
+.header .actions button {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all .15s;
+}
+.header .actions button:active { transform:scale(.96); opacity:.8; }
+.header .actions button.danger { background: #fef2f2; color: var(--danger); }
+
+/* Chat area */
+.chat-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-container .empty-state {
+  text-align: center;
+  margin-top: 10vh;
+  color: var(--sub);
+}
+.chat-container .empty-state .big-icon { font-size: 4rem; display:block; margin-bottom:12px; }
+.chat-container .empty-state p { font-size: 0.95rem; line-height:1.8; }
+
+/* Messages */
+.msg {
+  display: flex;
+  gap: 8px;
+  max-width: 85%;
+  animation: fadeIn .3s ease;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg.cat { align-self: flex-start; }
+
+.msg .avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.msg.user .avatar { background: var(--primary-light); }
+.msg.cat .avatar { background: #f5f5f4; }
+
+.msg .bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user .bubble { background: var(--bubble-user); color: white; border-bottom-right-radius: 8px; }
+.msg.cat .bubble { background: var(--bubble-cat); color: var(--text); border-bottom-left-radius: 8px; box-shadow: var(--shadow); }
+
+.msg .time {
+  font-size: 0.7rem;
+  color: var(--sub);
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
+/* Typing indicator */
+.typing { display:flex; gap:4px; padding:8px 16px; align-items:center; }
+.typing span {
+  width:8px; height:8px; border-radius:50%; background:var(--sub);
+  animation: bounce 1.4s infinite ease-in-out;
+}
+.typing span:nth-child(1) { animation-delay:0s; }
+.typing span:nth-child(2) { animation-delay:.15s; }
+.typing span:nth-child(3) { animation-delay:.3s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(.6);opacity:.4;} 40%{transform:scale(1);opacity:1;} }
+
+/* Input area */
+.input-area {
+  background: white;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+
+.input-area textarea {
+  flex: 1;
+  border: 2px solid var(--border);
+  border-radius: 24px;
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.4;
+  max-height: 120px;
+  background: var(--bg);
+  transition: border-color .2s;
+}
+.input-area textarea:focus { border-color: var(--primary); }
+
+.input-area button {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: white;
+  font-size: 1.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.input-area button:active { transform: scale(.92); }
+.input-area button:disabled { background: #d6d3d1; cursor: not-allowed; }
+
+.input-area .upload-btn {
+  width: 40px; height: 40px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+/* Suggestions chips */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+.suggestions span {
+  background: white;
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.suggestions span:active { background: var(--primary-light); border-color: var(--primary); }
+
+/* Dashboard modal */
+.modal-overlay {
+  display: none;
+  position: fixed; inset:0;
+  background: rgba(0,0,0,.4);
+  z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.show { display:flex; }
+.modal {
+  background: white;
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15);
+}
+.modal h3 { font-size: 1.2rem; margin-bottom: 16px; color: var(--primary); }
+.modal .stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+.modal .stat.clickable {
+  cursor: pointer;
+  transition: background .15s;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+}
+.modal .stat.clickable:hover { background: var(--primary-light); }
+.modal .stat .label { color: var(--sub); }
+.modal .stat .value { font-weight: 600; }
+.modal .stat .arrow { color: var(--sub); margin-left: 6px; font-size: 0.8rem; }
+.modal .close-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Sub-modal list */
+.sub-list { list-style: none; }
+.sub-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.sub-list li .left { display: flex; flex-direction: column; gap: 2px; }
+.sub-list li .left .title { font-weight: 600; }
+.sub-list li .left .sub { font-size: 0.8rem; color: var(--sub); }
+.sub-list li .days {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+.sub-list li .days.warn { color: var(--warn); }
+.sub-list li .days.urgent { color: var(--danger); }
+
+.cat-info-card {
+  background: var(--primary-light);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cat-info-card .cat-avatar {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: #f5f5f4;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  transition: opacity .15s;
+}
+.cat-info-card .cat-avatar:hover { opacity: .8; }
+.cat-info-card .cat-avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  position: absolute; inset: 0;
+}
+.cat-info-card .cat-avatar .overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.3);
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity .15s;
+  border-radius: 50%;
+}
+.cat-info-card .cat-avatar:hover .overlay { opacity: 1; }
+.cat-info-card .cat-details { line-height: 1.6; }
+.cat-info-card .cat-details .cat-name { font-weight: 700; font-size: 1.1rem; }
+.cat-info-card .cat-details .cat-meta { font-size: 0.85rem; color: var(--sub); }
+
+/* Cat status tag */
+.cat-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cat-status-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.cat-status-tag:hover { opacity: .8; }
+.cat-status-tag.status-减肥中 { background: #fff7ed; color: #c2410c; }
+.cat-status-tag.status-生病中 { background: #fef2f2; color: #dc2626; }
+.cat-status-tag.status-恢复期 { background: #f0fdf4; color: #16a34a; }
+.cat-status-tag.status-挑食中 { background: #fefce8; color: #ca8a04; }
+.cat-status-tag.status-活泼好动 { background: #eff6ff; color: #2563eb; }
+.cat-status-tag.status-安静嗜睡 { background: #faf5ff; color: #9333ea; }
+.cat-status-edit-btn {
+  display: inline-block;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: .5;
+  transition: opacity .15s;
+  line-height: 1;
+  padding: 2px;
+}
+.cat-status-edit-btn:hover { opacity: 1; }
+.cat-status-select {
+  padding: 4px 8px;
+  border: 2px solid var(--primary);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  background: white;
+  outline: none;
+}
+
+/* Cat bio */
+.cat-bio-section { margin-top: 6px; position: relative; }
+.cat-bio-text {
+  font-size: 0.82rem;
+  color: var(--sub);
+  line-height: 1.5;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s;
+  min-height: 22px;
+}
+.cat-bio-text:hover { background: rgba(255,255,255,.6); }
+.cat-bio-text.placeholder { color: #c5c0ba; font-style: italic; }
+.cat-bio-edit {
+  width: 100%;
+  font-size: 0.82rem;
+  font-family: inherit;
+  line-height: 1.5;
+  padding: 6px 8px;
+  border: 2px solid var(--primary);
+  border-radius: 8px;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  background: white;
+}
+.cat-bio-actions { display: flex; gap: 6px; margin-top: 4px; }
+.cat-bio-actions button {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.cat-bio-save { background: var(--primary); color: white; }
+.cat-bio-save:active { transform: scale(.95); }
+.cat-bio-cancel { background: white; color: var(--sub); border: 1px solid var(--border); }
+
+/* Gallery filter */
+.gallery-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 12px;
+}
+.gallery-date-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: white;
+  outline: none;
+  transition: border-color .2s;
+}
+.gallery-date-input:focus { border-color: var(--primary); }
+.gallery-filter-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.gallery-filter-btn.primary { background: var(--primary); color: white; }
+.gallery-filter-btn.primary:active { transform: scale(.96); }
+.gallery-filter-btn.secondary { background: white; color: var(--text); border: 1px solid var(--border); }
+.gallery-filter-btn.secondary:active { background: var(--bg); }
+
+/* Gallery date groups */
+.gallery-date-group {
+  margin-bottom: 18px;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+}
+.gallery-date-header {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary-light);
+}
+.gallery-date-count { font-size: 0.8rem; color: var(--sub); font-weight: 400; }
+
+/* Gallery grid */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.gallery-item { border-radius: 8px; overflow: hidden; cursor: pointer; aspect-ratio: 1; background: #f5f5f4; }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Calendar */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+.calendar-nav button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: all .15s;
+}
+.calendar-nav button:active { background: var(--primary-light); }
+.calendar-nav .calendar-month-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.calendar-nav .calendar-today-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  font-weight: 600;
+}
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--sub);
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+.calendar-weekdays .weekend { color: var(--danger); }
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.calendar-day-cell {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 6px;
+  cursor: pointer;
+  transition: background .15s;
+  display: flex;
+  flex-direction: column;
+  min-height: 70px;
+  position: relative;
+  overflow: hidden;
+}
+.calendar-day-cell:hover { background: var(--primary-light); }
+.calendar-day-cell.today { border: 2px solid var(--primary); background: var(--primary-light); }
+.calendar-day-cell.other-month { opacity: .35; }
+.calendar-day-cell.drag-over { background: #fde68a; border: 2px dashed var(--warn); }
+.calendar-day-cell.selected { background: #ffedd5; box-shadow: inset 0 0 0 2px var(--primary); }
+.calendar-day-num {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  width: 22px; height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.calendar-day-cell.today .calendar-day-num { background: var(--primary); color: white; }
+.calendar-day-cell .weekend-num { color: var(--danger); }
+.calendar-event-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+.calendar-event-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: grab;
+}
+.calendar-event-dot:active { cursor: grabbing; }
+.calendar-event-dot.vaccine { background: #3b82f6; }
+.calendar-event-dot.deworm { background: #22c55e; }
+.calendar-event-dot.vet_visit { background: #ef4444; }
+.calendar-event-dot.dental { background: #f97316; }
+.calendar-event-dot.birthday { background: #ec4899; }
+.calendar-day-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: auto;
+  font-size: 0.65rem;
+  opacity: .8;
+}
+
+/* Day detail panel */
+.calendar-day-detail {
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 12px;
+  display: none;
+}
+.calendar-day-detail.show { display: block; }
+.calendar-day-detail h4 { font-size: 1rem; margin-bottom: 10px; color: var(--primary); }
+.calendar-day-detail .detail-section { margin-bottom: 10px; }
+.calendar-day-detail .detail-section .section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--sub);
+  margin-bottom: 4px;
+}
+.calendar-day-detail .detail-item {
+  font-size: 0.85rem;
+  padding: 4px 0;
+  display: flex;
+  justify-content: space-between;
+}
+.calendar-day-detail .detail-item .drag-handle {
+  cursor: grab;
+  margin-right: 6px;
+  opacity: .4;
+  user-select: none;
+}
+.calendar-day-detail .detail-item .drag-handle:active { cursor: grabbing; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .header { padding: 10px 14px; }
+  .header .logo { font-size: 1.1rem; }
+  .msg { max-width: 90%; }
+  .msg .bubble { font-size: 0.9rem; padding: 10px 14px; }
+  .input-area { padding: 10px 12px; gap: 8px; }
+  .input-area textarea { padding: 10px 16px; font-size: 0.9rem; }
+  .input-area button { width: 44px; height: 44px; }
+  .gallery-filter { flex-wrap: wrap; }
+  .gallery-date-input { flex: 1 1 100%; }
+  .gallery-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .gallery-date-group { padding: 8px; margin-bottom: 12px; }
+  .gallery-date-header { font-size: 0.95rem; }
+  .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .calendar-day-cell { padding: 4px 2px; font-size: 0.75rem; min-height: 44px; }
+  .calendar-day-num { font-size: 0.75rem; width: 20px; height: 20px; line-height: 20px; }
+  .calendar-event-dot { width: 5px; height: 5px; margin: 0 2px; }
+  .calendar-day-indicators { gap: 1px; margin-top: 2px; font-size: 0.6rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Notification permission prompt -->
+<div class="notify-prompt" id="notifyPrompt">
+  <span class="notify-prompt-text">🔔 开启桌面通知，及时获取猫咪提醒</span>
+  <button class="notify-enable-btn" onclick="requestNotificationPermission()">开启</button>
+  <button class="notify-dismiss-btn" onclick="dismissNotifyPrompt()">✕</button>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo"><span class="icon">🐱</span>猫咪私人助理</div>
+  <div class="actions">
+    <button onclick="openGallery()" title="相册">🖼️</button>
+    <button onclick="openDashboard()" title="仪表盘">📊</button>
+    <button onclick="openCalendar()" title="日历">📅</button>
+    <button onclick="clearChat()" class="danger" title="清空对话">🔄</button>
+  </div>
+</div>
+
+<!-- Chat -->
+<div class="chat-container" id="chatContainer">
+  <div class="empty-state" id="emptyState">
+    <span class="big-icon">🐈</span>
+    <p>
+      你好！我是你的猫咪私人助理~<br>
+      试试跟我说这些：<br>
+      <br>
+      💬 "我家猫昨天打了疫苗"<br>
+      🛒 "今天买了渴望猫粮，花了300块"<br>
+      🎾 "它不喜欢逗猫棒，喜欢玩偶"<br>
+      📊 "最近猫粮花费多少？"<br>
+      ⚖️ "帮我记录一下体重是5.2kg"<br>
+      🧳 "我5月28-30日出差"
+    </p>
+  </div>
+</div>
+
+<!-- Suggestions -->
+<div class="suggestions" id="suggestions">
+  <span onclick="sendQuick('我家猫昨天打了疫苗')">💉 打了疫苗</span>
+  <span onclick="sendQuick('今天买了猫粮')">🛒 买了猫粮</span>
+  <span onclick="sendQuick('猫咪体重5.2kg')">⚖️ 记录体重</span>
+  <span onclick="sendQuick('猫咪还胖了还是瘦了？')">📈 体重趋势</span>
+  <span onclick="sendQuick('有什么提醒吗？')">🔔 查看提醒</span>
+</div>
+
+<!-- Input -->
+<div class="input-area">
+  <button class="upload-btn" onclick="document.getElementById('photoInput').click()" title="上传照片">📷</button>
+  <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="uploadPhoto()">
+  <textarea id="userInput" rows="1" placeholder="和猫咪助理说点什么..."
+    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"
+    oninput="autoResize(this)"></textarea>
+  <button id="sendBtn" onclick="sendMessage()">➤</button>
+</div>
+
+<!-- Dashboard Modal -->
+<div class="modal-overlay" id="dashboardModal">
+  <div class="modal" style="max-width:500px;">
+    <h3>📊 猫咪仪表盘</h3>
+    <div id="dashboardContent">加载中...</div>
+    <button class="close-btn" onclick="closeDashboard()">关闭</button>
+  </div>
+</div>
+
+<!-- Events Detail Modal -->
+<div class="modal-overlay" id="eventsModal">
+  <div class="modal">
+    <h3>📅 未来7天到期事件</h3>
+    <div id="eventsContent">加载中...</div>
+    <button class="close-btn" onclick="closeSubModal('eventsModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Expense Summary Modal -->
+<div class="modal-overlay" id="expenseModal">
+  <div class="modal">
+    <h3>💰 花费分类统计</h3>
+    <div id="expenseContent">加载中...</div>
+    <button class="close-btn" onclick="closeSubModal('expenseModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Photo Gallery Modal -->
+<div class="modal-overlay" id="galleryModal">
+  <div class="modal" style="max-width:650px;">
+    <h3>🖼️ 猫咪相册</h3>
+    <div class="gallery-filter">
+      <input type="date" id="galleryDateFilter" class="gallery-date-input" placeholder="选择日期筛选">
+      <button onclick="filterGalleryByDate()" class="gallery-filter-btn primary">筛选</button>
+      <button onclick="resetGalleryFilter()" class="gallery-filter-btn secondary">重置</button>
+    </div>
+    <div id="galleryContent"></div>
+    <button class="close-btn" onclick="closeSubModal('galleryModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Category Detail Modal -->
+<div class="modal-overlay" id="categoryDetailModal">
+  <div class="modal" style="max-width:500px;">
+    <h3 id="categoryDetailTitle">📦 分类详情</h3>
+    <div id="categoryDetailContent">加载中...</div>
+    <button class="close-btn" onclick="closeSubModal('categoryDetailModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Item Detail Modal -->
+<div class="modal-overlay" id="itemDetailModal">
+  <div class="modal" style="max-width:500px;">
+    <h3 id="itemDetailTitle">📋 购买记录</h3>
+    <div id="itemDetailContent">加载中...</div>
+    <button class="close-btn" onclick="closeSubModal('itemDetailModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Image Viewer Modal -->
+<div class="modal-overlay" id="imageViewerModal">
+  <div class="modal" style="max-width:650px;padding:16px;background:#1c1917;color:white;user-select:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span id="viewerCounter" style="font-size:0.9rem;opacity:0.8;"></span>
+      <button onclick="closeImageViewer()" style="background:rgba(255,255,255,.2);color:white;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;">✕</button>
+    </div>
+    <div id="viewerImageArea" style="display:flex;align-items:center;justify-content:center;min-height:300px;position:relative;cursor:default;">
+      <button id="viewerPrevBtn" onclick="prevImage()" style="position:absolute;left:4px;background:rgba(255,255,255,.15);color:white;border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;z-index:2;">◀</button>
+      <img id="viewerImage" src="" style="max-width:100%;max-height:60vh;object-fit:contain;border-radius:8px;" draggable="false">
+      <button id="viewerNextBtn" onclick="nextImage()" style="position:absolute;right:4px;background:rgba(255,255,255,.15);color:white;border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;z-index:2;">▶</button>
+    </div>
+    <div id="viewerHint" style="text-align:center;margin-top:8px;font-size:0.75rem;opacity:0.6;"></div>
+  </div>
+</div>
+
+<!-- Chart Modal (for chat charts) -->
+<div class="modal-overlay" id="chartModal">
+  <div class="modal" style="max-width:650px;">
+    <h3>📈 花费趋势</h3>
+    <div id="chartModalContent" style="position:relative;height:350px;"><canvas id="chatChartCanvas"></canvas></div>
+    <button class="close-btn" onclick="closeSubModal('chartModal')">关闭</button>
+  </div>
+</div>
+
+<!-- Calendar Modal -->
+<div class="modal-overlay" id="calendarModal">
+  <div class="modal" style="max-width:680px;">
+    <h3>📅 猫咪日历</h3>
+    <div class="calendar-nav">
+      <button onclick="calendarPrevMonth()">◀</button>
+      <span class="calendar-month-title" id="calendarMonthTitle"></span>
+      <button onclick="calendarNextMonth()">▶</button>
+      <button class="calendar-today-btn" onclick="calendarGoToday()">今天</button>
+    </div>
+    <div class="calendar-weekdays">
+      <span class="weekend">日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="weekend">六</span>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+    <div class="calendar-day-detail" id="calendarDayDetail">
+      <h4 id="calendarDetailTitle"></h4>
+      <div id="calendarDetailContent"></div>
+    </div>
+    <button class="close-btn" onclick="closeSubModal('calendarModal')">关闭</button>
+  </div>
+</div>
+
+<script>
+// ==================== 状态 ====================
+const STORAGE_KEY = 'cat_assistant_history';
+const photoPattern = /\/photos\/cat_\d+_\d+\.(?:jpg|jpeg|png|gif|webp)/i;
+let chatHistory = [];
+let displayMessages = [];  // { role, text, time } — for rendered DOM
+let isLoading = false;
+
+const chatContainer = document.getElementById('chatContainer');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const emptyState = document.getElementById('emptyState');
+const suggestions = document.getElementById('suggestions');
+
+// ==================== 初始化：从 localStorage 恢复 ====================
+function loadHistory() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      chatHistory = parsed.history || [];
+      displayMessages = parsed.display || [];
+      // 渲染到页面
+      displayMessages.forEach(m => addMessage(m.role, m.text, false, m.time));
+    }
+  } catch (e) {
+    console.error('加载聊天记录失败:', e);
+    chatHistory = [];
+    displayMessages = [];
+  }
+  updateEmptyState();
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      history: chatHistory,
+      display: displayMessages
+    }));
+  } catch (e) {
+    console.error('保存聊天记录失败:', e);
+  }
+}
+
+loadHistory();
+
+// ==================== 桌面通知 ====================
+const NOTIFY_STORAGE_KEY = 'cat_assistant_notifications';
+const NOTIFY_CHECK_INTERVAL = 2 * 60 * 60 * 1000; // 2 小时
+let notifyCheckTimer = null;
+
+function getNotifySettings() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIFY_STORAGE_KEY)) || { permission: 'default', pushedEvents: {}, lastCheckDate: '' };
+  } catch (e) { return { permission: 'default', pushedEvents: {}, lastCheckDate: '' }; }
+}
+
+function saveNotifySettings(settings) {
+  try {
+    localStorage.setItem(NOTIFY_STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) { /* ignore */ }
+}
+
+function dismissNotifyPrompt() {
+  var bar = document.getElementById('notifyPrompt');
+  if (bar) bar.classList.remove('show');
+  var s = getNotifySettings();
+  s.permission = 'dismissed';
+  saveNotifySettings(s);
+}
+
+function requestNotificationPermission() {
+  var bar = document.getElementById('notifyPrompt');
+  if (bar) bar.classList.remove('show');
+
+  if (!('Notification' in window)) return;
+
+  Notification.requestPermission().then(function(perm) {
+    var s = getNotifySettings();
+    s.permission = perm;
+    saveNotifySettings(s);
+    if (perm === 'granted') {
+      checkAndNotify();
+    }
+  });
+}
+
+function showNotifyPrompt() {
+  if (!('Notification' in window)) return;
+  var settings = getNotifySettings();
+  if (settings.permission === 'granted' || settings.permission === 'denied' || settings.permission === 'dismissed') return;
+  var bar = document.getElementById('notifyPrompt');
+  if (bar) bar.classList.add('show');
+}
+
+function canNotify() {
+  return ('Notification' in window) && Notification.permission === 'granted';
+}
+
+function wasEventPushed(eventId) {
+  var s = getNotifySettings();
+  var today = new Date().toISOString().slice(0, 10);
+  return s.pushedEvents[eventId] === today;
+}
+
+function markEventPushed(eventId) {
+  var s = getNotifySettings();
+  var today = new Date().toISOString().slice(0, 10);
+  s.pushedEvents[eventId] = today;
+  // 清理旧日期的记录（非今天的全部清除）
+  var cleaned = {};
+  Object.keys(s.pushedEvents).forEach(function(k) {
+    if (s.pushedEvents[k] === today) cleaned[k] = s.pushedEvents[k];
+  });
+  s.pushedEvents = cleaned;
+  saveNotifySettings(s);
+}
+
+function sendNotification(title, body, tag) {
+  if (!canNotify()) return;
+  try {
+    var n = new Notification(title, {
+      body: body,
+      icon: '/photos/avatar.jpg',
+      tag: tag || 'cat-reminder',
+      requireInteraction: true,
+      silent: false
+    });
+    n.onclick = function() {
+      window.focus();
+      n.close();
+    };
+  } catch (e) { /* 静默失败 */ }
+}
+
+async function checkAndNotify() {
+  if (!canNotify()) return;
+
+  var today = new Date().toISOString().slice(0, 10);
+  var settings = getNotifySettings();
+
+  // 今天已经检查过，跳过（防止刷新页面重复推送）
+  if (settings.lastCheckDate === today) return;
+
+  try {
+    var resp = await fetch('/api/upcoming_events');
+    var data = await resp.json();
+
+    if (!data.events || data.events.length === 0) return;
+
+    // 过滤出今天还没推送过的事件
+    var newEvents = data.events.filter(function(e) {
+      var eventId = e.type + '_' + e.due_date;
+      return !wasEventPushed(eventId);
+    });
+
+    if (newEvents.length === 0) return;
+
+    // 标记所有事件为已推送
+    data.events.forEach(function(e) {
+      var eventId = e.type + '_' + e.due_date;
+      markEventPushed(eventId);
+    });
+    settings.lastCheckDate = today;
+    saveNotifySettings(settings);
+
+    // 发送通知
+    if (newEvents.length <= 3) {
+      // 逐条发送（间隔 300ms 避免浏览器合并）
+      newEvents.forEach(function(e, i) {
+        setTimeout(function() {
+          var emoji = { '疫苗': '💉', '驱虫': '💊', '就医': '🏥', '拔牙/口腔': '🦷', '生日': '🎂' };
+          var icon = emoji[e.type] || '📅';
+          var title = '🐱 猫咪私人助理';
+          var body = icon + ' ' + e.type + '到期：距离 ' + e.due_date + ' 还有 ' + e.days_left + ' 天' + (e.notes ? '（' + e.notes + '）' : '');
+          sendNotification(title, body, 'cat-event-' + i);
+        }, i * 300);
+      });
+    } else {
+      // 超过 3 条，汇总通知
+      var summary = newEvents.map(function(e) {
+        return e.type + (e.days_left <= 1 ? '（仅剩' + e.days_left + '天！）' : '（还有' + e.days_left + '天）');
+      }).join('、');
+      sendNotification('🐱 猫咪私人助理', '📢 您有 ' + newEvents.length + ' 个即将到期事件：' + summary + '。点击查看详情。', 'cat-summary');
+    }
+  } catch (e) { /* 网络错误，静默失败 */ }
+}
+
+function startNotifyScheduler() {
+  // 页面加载后 3 秒显示提示条
+  setTimeout(function() { showNotifyPrompt(); }, 3000);
+
+  // 权限已授权则立即检查
+  if (canNotify()) {
+    checkAndNotify();
+  }
+
+  // 每 2 小时检查一次
+  if (notifyCheckTimer) clearInterval(notifyCheckTimer);
+  notifyCheckTimer = setInterval(function() {
+    if (canNotify()) {
+      // 重置 lastCheckDate 以允许下次检查
+      var s = getNotifySettings();
+      s.lastCheckDate = '';
+      saveNotifySettings(s);
+      checkAndNotify();
+    }
+  }, NOTIFY_CHECK_INTERVAL);
+}
+
+startNotifyScheduler();
+
+// ==================== UI 辅助 ====================
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function scrollToBottom() {
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function updateEmptyState() {
+  if (chatHistory.length === 0) {
+    emptyState.style.display = 'block';
+  } else {
+    emptyState.style.display = 'none';
+  }
+}
+
+function formatTime() {
+  const now = new Date();
+  return now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+}
+
+function addMessage(role, text, animate, savedTime) {
+  updateEmptyState();
+
+  const time = savedTime || formatTime();
+
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'user' ? '👤' : '🐱';
+
+  const wrapper = document.createElement('div');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  // 检测 [CHART_DATA] 标签，渲染图表按钮
+  if (text.includes('[CHART_DATA]')) {
+    const chartMatch = text.match(/\[CHART_DATA(?::([^\]]+))?\]([\s\S]*?)\[\/CHART_DATA\]/);
+    const displayText = text.replace(/\[CHART_DATA[^\]]*\][\s\S]*?\[\/CHART_DATA\]/, '');
+    bubble.textContent = displayText.trim();
+    if (chartMatch) {
+      const chartCategory = (chartMatch[1] && chartMatch[1] !== '全部') ? chartMatch[1] : null;
+      const chartBtn = document.createElement('button');
+      chartBtn.textContent = '📈 查看趋势图';
+      chartBtn.style.cssText = 'display:block;margin-top:8px;padding:8px 16px;background:var(--primary);color:white;border:none;border-radius:12px;cursor:pointer;font-size:0.9rem;font-weight:600;';
+      chartBtn.onclick = () => showChartInModal(chartCategory);
+      bubble.appendChild(chartBtn);
+    }
+  } else if (photoPattern.test(text)) {
+    const parts = text.split(/(\/photos\/cat_\d+_\d+\.(?:jpg|jpeg|png|gif|webp))/gi);
+    parts.forEach(part => {
+      if (photoPattern.test(part)) {
+        photoPattern.lastIndex = 0;
+        const imgWrapper = document.createElement('div');
+        imgWrapper.style.cssText = 'margin:6px 0;border-radius:8px;overflow:hidden;max-width:200px;cursor:pointer;';
+        imgWrapper.onclick = () => openImageViewerSingle(part);
+        const img = document.createElement('img');
+        img.src = part;
+        img.style.cssText = 'width:100%;display:block;';
+        img.loading = 'lazy';
+        imgWrapper.appendChild(img);
+        bubble.appendChild(imgWrapper);
+      } else if (part.trim()) {
+        const span = document.createElement('span');
+        span.textContent = part;
+        bubble.appendChild(span);
+        if (part.includes('\n')) {
+          bubble.innerHTML = bubble.innerHTML.replace(/\n/g, '<br>');
+        }
+      }
+    });
+  } else {
+    bubble.textContent = text;
+  }
+  wrapper.appendChild(bubble);
+
+  const timestamp = document.createElement('div');
+  timestamp.className = 'time';
+  timestamp.textContent = time;
+  wrapper.appendChild(timestamp);
+
+  div.appendChild(avatar);
+  div.appendChild(wrapper);
+  chatContainer.appendChild(div);
+  scrollToBottom();
+
+  if (animate) {
+    div.style.animation = 'none';
+    div.offsetHeight;
+    div.style.animation = 'fadeIn .3s ease';
+  }
+}
+
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'msg cat typing-msg';
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = '🐱';
+  const typing = document.createElement('div');
+  typing.className = 'bubble typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  div.appendChild(avatar);
+  div.appendChild(typing);
+  chatContainer.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function removeTyping(el) {
+  if (el && el.parentNode) el.remove();
+}
+
+function setLoading(loading) {
+  isLoading = loading;
+  sendBtn.disabled = loading;
+  userInput.disabled = loading;
+}
+
+// ==================== API ====================
+async function sendMessage(msgOverride) {
+  const msg = msgOverride || userInput.value.trim();
+  if (!msg || isLoading) return;
+
+  if (!msgOverride) {
+    userInput.value = '';
+    userInput.style.height = 'auto';
+  }
+
+  const msgTime = formatTime();
+  addMessage('user', msg, true, msgTime);
+  displayMessages.push({ role: 'user', text: msg, time: msgTime });
+
+  const typingEl = showTyping();
+  setLoading(true);
+
+  try {
+    const resp = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: chatHistory })
+    });
+
+    const data = await resp.json();
+    removeTyping(typingEl);
+    const reply = data.reply || '喵？我不太明白...';
+    const replyTime = formatTime();
+    addMessage('cat', reply, true, replyTime);
+    displayMessages.push({ role: 'cat', text: reply, time: replyTime });
+
+    if (data.history) {
+      chatHistory = data.history;
+    }
+    saveHistory();
+
+    // 每次对话后，如果仪表盘或日历正在显示，自动刷新
+    await refreshDashboardIfOpen();
+    await refreshCalendarIfOpen();
+    await refreshUpcomingEvents();
+  } catch (err) {
+    removeTyping(typingEl);
+    const errTime = formatTime();
+    addMessage('cat', '⚠️ 网络连接失败，请检查服务是否启动。', true, errTime);
+    displayMessages.push({ role: 'cat', text: '⚠️ 网络连接失败，请检查服务是否启动。', time: errTime });
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function sendQuick(text) {
+  sendMessage(text);
+}
+
+async function uploadAvatar() {
+  const file = document.getElementById('avatarInput').files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    await fetch('/api/upload-avatar', { method: 'POST', body: formData });
+    // 刷新仪表盘以显示新头像
+    openDashboard();
+  } catch (err) {
+    console.error('头像上传失败', err);
+  }
+  document.getElementById('avatarInput').value = '';
+}
+
+async function uploadPhoto() {
+  const input = document.getElementById('photoInput');
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  const userTime = formatTime();
+  const countMsg = files.length > 1 ? `📷 [上传了 ${files.length} 张照片]` : '📷 [上传了照片]';
+  addMessage('user', countMsg, true, userTime);
+  displayMessages.push({ role: 'user', text: countMsg, time: userTime });
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+
+  const typingEl = showTyping();
+  setLoading(true);
+
+  try {
+    const resp = await fetch('/upload-photo', { method: 'POST', body: formData });
+    const data = await resp.json();
+    removeTyping(typingEl);
+
+    if (data.photos && data.photos.length > 0) {
+      const photoList = data.photos.map(function(p) {
+        return p.photo_path + ' (' + (p.original_name || '') + ')';
+      }).join('\n');
+      const msgText = photoList + '\n' + (data.message || '照片已保存');
+      const msgTime = formatTime();
+      addMessage('cat', msgText, true, msgTime);
+      displayMessages.push({ role: 'cat', text: msgText, time: msgTime });
+    } else {
+      addMessage('cat', '⚠️ 上传失败', true, formatTime());
+      displayMessages.push({ role: 'cat', text: '⚠️ 上传失败', time: formatTime() });
+    }
+    saveHistory();
+  } catch (err) {
+    removeTyping(typingEl);
+    addMessage('cat', '⚠️ 上传失败', true, formatTime());
+    displayMessages.push({ role: 'cat', text: '⚠️ 上传失败', time: formatTime() });
+    console.error(err);
+  } finally {
+    setLoading(false);
+    input.value = '';
+  }
+}
+
+function clearChat() {
+  chatHistory = [];
+  displayMessages = [];
+  localStorage.removeItem(STORAGE_KEY);
+  chatContainer.innerHTML = '';
+  updateEmptyState();
+  chatContainer.appendChild(emptyState);
+}
+
+// ==================== 仪表盘 ====================
+async function openDashboard() {
+  document.getElementById('dashboardModal').classList.add('show');
+  document.getElementById('dashboardContent').innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  try {
+    const resp = await fetch('/api/dashboard?_=' + Date.now());
+    const data = await resp.json();
+    console.log('仪表盘数据:', data.last_weight);
+
+    const catName = data.cat_name?.name || '未设置';
+    const catBirthday = data.cat_name?.birthday || '未设置';
+    const catBio = data.cat_name?.bio || '';
+    const catStatus = data.cat_name?.status || '';
+
+    const statusTagHtml = catStatus
+      ? '<span class="cat-status-tag status-' + catStatus + '" onclick="editCatStatus()" title="点击更换状态">' + catStatus + '</span>'
+      : '';
+
+    document.getElementById('dashboardContent').innerHTML = `
+      <div class="cat-info-card">
+        <div class="cat-avatar" onclick="document.getElementById('avatarInput').click()" title="点击更换猫咪头像">
+          <img src="/photos/avatar.jpg?t=${Date.now()}" onerror="this.style.display='none'" onload="this.style.display='block';this.nextElementSibling.style.display='none'">
+          <span class="emoji-fallback">🐱</span>
+          <span class="overlay">📷</span>
+        </div>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="uploadAvatar()">
+        <div class="cat-details">
+          <div class="cat-name-row">
+            <span class="cat-name">${catName}</span>
+            ${statusTagHtml}
+            <span class="cat-status-edit-btn" onclick="editCatStatus()" title="编辑状态">✏️</span>
+          </div>
+          <div class="cat-meta">🎂 ${catBirthday} | 🐾 ${data.cat_breed} | ♀ ${data.cat_gender}</div>
+          <div class="cat-bio-section" id="catBioSection">
+            ${catBio
+              ? '<div class="cat-bio-text" id="catBioText" onclick="editCatBio()" title="点击编辑简介">📝 ' + escapeHtml(catBio) + '</div>'
+              : '<div class="cat-bio-text placeholder" id="catBioText" onclick="editCatBio()" title="点击添加简介">📝 点击添加简介...</div>'}
+          </div>
+        </div>
+      </div>
+      <div class="stat clickable" onclick="openEventsDetail()">
+        <span class="label">📅 即将到期事件</span>
+        <span class="value" id="dashUpcoming">${data.upcoming_events} 个 <span class="arrow">›</span></span>
+      </div>
+      <div class="stat"><span class="label">⚠️ 库存不足</span><span class="value" id="dashLowStock">${data.low_stock_count} 项</span></div>
+      <div class="stat clickable" onclick="openExpenseSummary()">
+        <span class="label">💰 本月花费</span>
+        <span class="value" id="dashMonthly">¥${data.monthly_expense} <span class="arrow">›</span></span>
+      </div>
+      <div class="stat clickable" onclick="openExpenseSummary()">
+        <span class="label">💳 总开销</span>
+        <span class="value" id="dashTotal">¥${data.total_expense} <span class="arrow">›</span></span>
+      </div>
+      <div class="stat"><span class="label">⚖️ 最近体重</span><span class="value" id="dashWeight">${data.last_weight ? data.last_weight.weight + 'kg (' + data.last_weight.date + ')' : '未记录'}</span></div>
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+        <p style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">⚖️ 体重变化趋势</p>
+        <div id="weightTrendChartArea" style="position:relative;height:200px;"></div>
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+        <p style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">📈 分类趋势图</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="trendCategorySelect" style="flex:1;padding:10px;border:2px solid var(--border);border-radius:10px;font-size:0.9rem;background:white;font-family:inherit;">
+            <option value="猫粮">🍚 猫粮</option>
+            <option value="猫砂">🧹 猫砂</option>
+            <option value="零食">🍪 零食</option>
+            <option value="玩具">🎾 玩具</option>
+            <option value="医疗">💊 医疗</option>
+            <option value="用品">🛁 用品</option>
+          </select>
+          <button onclick="renderDashboardCategoryTrend()" style="padding:10px 18px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:0.9rem;font-weight:600;cursor:pointer;white-space:nowrap;">查看</button>
+        </div>
+        <div id="dashboardChartArea" style="position:relative;height:280px;margin-top:10px;"></div>
+      </div>
+    `;
+
+    // 默认渲染猫粮趋势和体重趋势
+    setTimeout(() => { renderDashboardCategoryTrend(); renderWeightTrendChart(); }, 400);
+
+    // 启动自动刷新轮询（每 5 秒）
+    if (dashboardRefreshTimer) clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = setInterval(refreshDashboardIfOpen, 5000);
+  } catch (err) {
+    document.getElementById('dashboardContent').innerHTML = '<p style="color:var(--danger);">加载失败</p>';
+  }
+}
+
+function closeDashboard() {
+  document.getElementById('dashboardModal').classList.remove('show');
+  if (dashboardRefreshTimer) {
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = null;
+  }
+}
+
+async function refreshDashboardIfOpen() {
+  var modal = document.getElementById('dashboardModal');
+  if (!modal.classList.contains('show')) return;
+
+  try {
+    var resp = await fetch('/api/dashboard?_=' + Date.now());
+    var data = await resp.json();
+
+    // 更新各统计数值（仅在元素存在时）
+    var upcomingEl = document.getElementById('dashUpcoming');
+    if (upcomingEl) upcomingEl.innerHTML = data.upcoming_events + ' 个 <span class="arrow">›</span>';
+
+    var lowStockEl = document.getElementById('dashLowStock');
+    if (lowStockEl) lowStockEl.textContent = data.low_stock_count + ' 项';
+
+    var monthlyEl = document.getElementById('dashMonthly');
+    if (monthlyEl) monthlyEl.innerHTML = '¥' + data.monthly_expense + ' <span class="arrow">›</span>';
+
+    var totalEl = document.getElementById('dashTotal');
+    if (totalEl) totalEl.innerHTML = '¥' + data.total_expense + ' <span class="arrow">›</span>';
+
+    var weightEl = document.getElementById('dashWeight');
+    if (weightEl) {
+      weightEl.textContent = data.last_weight
+        ? data.last_weight.weight + 'kg (' + data.last_weight.date + ')'
+        : '未记录';
+    }
+
+    // 刷新趋势图（保持当前选择的分类）和体重趋势
+    renderDashboardCategoryTrend();
+    renderWeightTrendChart();
+  } catch (e) { console.error('仪表盘刷新失败:', e); }
+}
+
+async function refreshCalendarIfOpen() {
+  var modal = document.getElementById('calendarModal');
+  if (!modal.classList.contains('show')) return;
+  try {
+    await loadCalendarData();
+    // 保持之前选中的日期
+    if (calendarSelectedDate) {
+      var detailDiv = document.getElementById('calendarDayDetail');
+      if (!detailDiv.classList.contains('show')) {
+        var maps = buildDateMaps();
+        showDayDetail(calendarSelectedDate, maps);
+      }
+    }
+  } catch (e) { console.error('日历刷新失败:', e); }
+}
+
+async function refreshUpcomingEvents() {
+  var modal = document.getElementById('eventsModal');
+  if (!modal.classList.contains('show')) return;
+  try {
+    var resp = await fetch('/api/upcoming_events');
+    var data = await resp.json();
+    var contentEl = document.getElementById('eventsContent');
+
+    if (data.count === 0) {
+      contentEl.innerHTML = '<p style="text-align:center;color:var(--sub);padding:20px;">✅ 暂无即将到期事件</p>';
+      return;
+    }
+
+    var html = '<ul class="sub-list">';
+    data.events.forEach(function(e) {
+      var cls = '';
+      if (e.days_left <= 1) cls = 'urgent';
+      else if (e.days_left <= 3) cls = 'warn';
+      html += '<li>' +
+        '<div class="left"><span class="' + cls + '">' + e.type + '</span>' +
+        '<span class="note">' + (e.notes || '') + '</span></div>' +
+        '<div class="right" style="font-size:0.85rem;">' +
+        (e.days_left <= 0 ? '<span style="color:var(--danger);">今天到期!</span>' :
+         '<span style="color:var(--sub);">还有' + e.days_left + '天</span>') +
+        '</div></li>';
+    });
+    html += '</ul>';
+    contentEl.innerHTML = html;
+  } catch (e) { console.error('事件刷新失败:', e); }
+}
+
+// ==================== 猫咪简介编辑 ====================
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function editCatBio() {
+  var section = document.getElementById('catBioSection');
+  var textEl = document.getElementById('catBioText');
+  var currentBio = textEl.textContent.replace(/^📝\s*/, '').trim();
+  if (textEl.classList.contains('placeholder')) currentBio = '';
+
+  section.innerHTML =
+    '<textarea class="cat-bio-edit" id="catBioEdit" rows="3" placeholder="写一段猫咪简介...">' + escapeHtml(currentBio) + '</textarea>' +
+    '<div class="cat-bio-actions">' +
+    '<button class="cat-bio-save" onclick="saveCatBio()">保存</button>' +
+    '<button class="cat-bio-cancel" onclick="openDashboard()">取消</button>' +
+    '</div>';
+  document.getElementById('catBioEdit').focus();
+}
+
+async function saveCatBio() {
+  var textarea = document.getElementById('catBioEdit');
+  var bio = textarea.value.trim();
+
+  try {
+    var resp = await fetch('/api/cat_bio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bio: bio })
+    });
+    var data = await resp.json();
+    if (data.status === 'ok') {
+      // 刷新仪表盘显示
+      openDashboard();
+    }
+  } catch (err) {
+    console.error('保存简介失败', err);
+  }
+}
+
+// ==================== 猫咪状态编辑 ====================
+var CAT_STATUS_OPTIONS = ['', '减肥中', '生病中', '恢复期', '挑食中', '活泼好动', '安静嗜睡'];
+
+function editCatStatus() {
+  var nameRow = document.querySelector('.cat-name-row');
+  if (!nameRow) return;
+
+  // 找到当前状态标签和编辑按钮
+  var currentTag = nameRow.querySelector('.cat-status-tag');
+  var editBtn = nameRow.querySelector('.cat-status-edit-btn');
+  var currentStatus = currentTag ? currentTag.textContent.trim() : '';
+
+  // 替换为下拉选择框
+  var tagEl = currentTag || editBtn;
+  if (!tagEl) return;
+
+  var selectHtml = '<select class="cat-status-select" id="catStatusSelect" onchange="saveCatStatus(this.value)">';
+  CAT_STATUS_OPTIONS.forEach(function(s) {
+    var label = s || '（无状态）';
+    var selected = s === currentStatus ? ' selected' : '';
+    selectHtml += '<option value="' + s + '"' + selected + '>' + label + '</option>';
+  });
+  selectHtml += '</select>';
+
+  // 移除状态标签和编辑按钮，插入下拉框
+  if (currentTag) currentTag.style.display = 'none';
+  if (editBtn) editBtn.style.display = 'none';
+
+  var existingSelect = nameRow.querySelector('.cat-status-select');
+  if (existingSelect) existingSelect.remove();
+
+  var wrapper = document.createElement('span');
+  wrapper.innerHTML = selectHtml;
+  nameRow.appendChild(wrapper.firstElementChild);
+  document.getElementById('catStatusSelect').focus();
+}
+
+async function saveCatStatus(statusVal) {
+  try {
+    var resp = await fetch('/api/cat_status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: statusVal })
+    });
+    var data = await resp.json();
+    if (data.status === 'ok') {
+      openDashboard();
+    }
+  } catch (err) {
+    console.error('保存状态失败', err);
+  }
+}
+
+// ==================== 事件详情弹窗 ====================
+async function openEventsDetail() {
+  document.getElementById('eventsModal').classList.add('show');
+  document.getElementById('eventsContent').innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  try {
+    const resp = await fetch('/api/upcoming_events');
+    const data = await resp.json();
+
+    if (data.count === 0) {
+      document.getElementById('eventsContent').innerHTML = '<p style="text-align:center;color:var(--sub);padding:20px;">✅ 暂无即将到期事件</p>';
+      return;
+    }
+
+    let html = '<ul class="sub-list">';
+    data.events.forEach(e => {
+      let cls = '';
+      if (e.days_left <= 1) cls = 'urgent';
+      else if (e.days_left <= 3) cls = 'warn';
+      html += `
+        <li>
+          <div class="left">
+            <span class="title">🔔 ${e.type}</span>
+            <span class="sub">📅 ${e.due_date}${e.notes ? ' — ' + e.notes : ''}</span>
+          </div>
+          <span class="days ${cls}">${e.days_left}天</span>
+        </li>`;
+    });
+    html += '</ul>';
+    document.getElementById('eventsContent').innerHTML = html;
+  } catch (err) {
+    document.getElementById('eventsContent').innerHTML = '<p style="color:var(--danger);">加载失败</p>';
+  }
+}
+
+// ==================== 花费分类弹窗 ====================
+async function openExpenseSummary() {
+  document.getElementById('expenseModal').classList.add('show');
+  document.getElementById('expenseContent').innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  try {
+    const resp = await fetch('/api/expense_summary');
+    const data = await resp.json();
+
+    let html = `
+      <p style="text-align:center;margin-bottom:12px;font-weight:700;">
+        💳 总开销 ¥${data.total_all_time} &nbsp;|&nbsp; 📅 本月 ¥${data.total_this_month}
+      </p>
+      <p style="font-size:0.85rem;color:var(--sub);margin-bottom:8px;">全部时间分类：</p>
+      <ul class="sub-list">`;
+
+    const cats = [
+      { key: '猫粮', icon: '🍚' },
+      { key: '猫砂', icon: '🧹' },
+      { key: '玩具', icon: '🎾' },
+      { key: '零食', icon: '🍪' },
+      { key: '医疗', icon: '💊' },
+      { key: '用品', icon: '🛁' },
+      { key: '其他', icon: '📦' }
+    ];
+
+    cats.forEach(c => {
+      const all = data.categories_all_time[c.key] || 0;
+      const month = data.categories_this_month[c.key] || 0;
+      if (all > 0 || month > 0) {
+        html += `<li style="cursor:pointer;border-radius:8px;padding:8px;margin:0 -8px;" onclick="openCategoryDetail('${c.key}')" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='transparent'">
+          <div class="left">
+            <span class="title">${c.icon} ${c.key} <span style="font-size:0.7rem;color:var(--primary);">›</span></span>
+            <span class="sub">本月 ¥${month}</span>
+          </div>
+          <span style="font-weight:700;">¥${all}</span>
+        </li>`;
+      }
+    });
+
+    html += '</ul>';
+    document.getElementById('expenseContent').innerHTML = html;
+  } catch (err) {
+    document.getElementById('expenseContent').innerHTML = '<p style="color:var(--danger);">加载失败</p>';
+  }
+}
+
+function closeSubModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// ==================== 趋势图表 ====================
+let dashboardChartInstance = null;
+let weightChartInstance = null;
+const CAT_COLORS = { '猫粮': '#f97316', '猫砂': '#8b5cf6', '零食': '#ec4899', '玩具': '#14b8a6', '医疗': '#ef4444', '用品': '#3b82f6', '其他': '#6b7280' };
+const CAT_EMOJI = { '猫粮': '🍚', '猫砂': '🧹', '零食': '🍪', '玩具': '🎾', '医疗': '💊', '用品': '🛁', '其他': '📦' };
+
+function createChartConfig(labels, dataset, title) {
+  return {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: title,
+        data: dataset,
+        borderColor: CAT_COLORS[title] || '#f97316',
+        backgroundColor: (CAT_COLORS[title] || '#f97316') + '20',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointBackgroundColor: CAT_COLORS[title] || '#f97316',
+        borderWidth: 2.5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: (CAT_EMOJI[title] || '') + ' ' + title + ' 月度花费趋势',
+          font: { size: 16, weight: 'bold' },
+          padding: { bottom: 16 }
+        },
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return title + ': ¥' + ctx.parsed.y.toFixed(1); }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '月份', font: { size: 12 } },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: '金额 (元)', font: { size: 12 } },
+          ticks: { callback: v => '¥' + v, font: { size: 11 } }
+        }
+      }
+    }
+  };
+}
+
+function createMultiChartConfig(labels, categoriesData, title) {
+  const colors = CAT_COLORS;
+  const datasets = Object.keys(categoriesData).filter(k => categoriesData[k].some(v => v > 0))
+    .map(k => ({
+      label: k, data: categoriesData[k],
+      borderColor: colors[k] || '#999',
+      backgroundColor: (colors[k] || '#999') + '20',
+      fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2
+    }));
+
+  return {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: title || '月度花费趋势对比',
+          font: { size: 16, weight: 'bold' },
+          padding: { bottom: 16 }
+        },
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } },
+        tooltip: {
+          callbacks: { label: function(ctx) { return ctx.dataset.label + ': ¥' + ctx.parsed.y.toFixed(1); } }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '月份', font: { size: 12 } },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: '金额 (元)', font: { size: 12 } },
+          ticks: { callback: v => '¥' + v, font: { size: 11 } }
+        }
+      }
+    }
+  };
+}
+
+async function renderDashboardCategoryTrend() {
+  const category = document.getElementById('trendCategorySelect')?.value || '猫粮';
+  const area = document.getElementById('dashboardChartArea');
+  if (!area) return;
+
+  area.innerHTML = '<canvas id="dashboardTrendChart"></canvas>';
+  const canvas = document.getElementById('dashboardTrendChart');
+  if (!canvas) return;
+
+  try {
+    const resp = await fetch('/api/category_trend?category=' + encodeURIComponent(category));
+    const data = await resp.json();
+    if (!data.months || data.months.length === 0) {
+      area.innerHTML = '<p style="text-align:center;color:var(--sub);padding:20px;">暂无 ' + category + ' 的花费数据</p>';
+      return;
+    }
+
+    if (dashboardChartInstance) dashboardChartInstance.destroy();
+    dashboardChartInstance = new Chart(canvas, createChartConfig(data.months, data.totals, category));
+  } catch (err) { console.error('Chart error:', err); }
+}
+
+async function renderWeightTrendChart() {
+  var area = document.getElementById('weightTrendChartArea');
+  if (!area) return;
+
+  area.innerHTML = '<canvas id="weightTrendChart"></canvas>';
+  var canvas = document.getElementById('weightTrendChart');
+  if (!canvas) return;
+
+  try {
+    var resp = await fetch('/api/weight_trend?_=' + Date.now());
+    var data = await resp.json();
+    if (!data.dates || data.dates.length === 0) {
+      area.innerHTML = '<p style="text-align:center;color:var(--sub);padding:20px;font-size:0.85rem;">暂无体重记录</p>';
+      return;
+    }
+
+    if (weightChartInstance) weightChartInstance.destroy();
+    weightChartInstance = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.dates,
+        datasets: [{
+          label: '体重 (kg)',
+          data: data.weights,
+          borderColor: '#f97316',
+          backgroundColor: 'rgba(249,115,22,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: '#f97316',
+          borderWidth: 2.5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.parsed.y.toFixed(2) + ' kg'; }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { font: { size: 10 } }
+          },
+          y: {
+            title: { display: true, text: 'kg', font: { size: 11 } },
+            ticks: { font: { size: 10 }, callback: function(v) { return v + 'kg'; } }
+          }
+        }
+      }
+    });
+  } catch (err) { console.error('体重趋势图错误:', err); }
+}
+
+// ==================== 分类下钻详情 ====================
+async function openCategoryDetail(category) {
+  document.getElementById('categoryDetailModal').classList.add('show');
+  const titleEl = document.getElementById('categoryDetailTitle');
+  const contentEl = document.getElementById('categoryDetailContent');
+  titleEl.textContent = (CAT_EMOJI[category] || '📦') + ' ' + category + ' 详情';
+  contentEl.innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  try {
+    const resp = await fetch('/api/category_detail?category=' + encodeURIComponent(category));
+    const data = await resp.json();
+
+    let html = '<p style="font-size:0.85rem;color:var(--sub);margin-bottom:10px;">' +
+      (category === '医疗' || category === '用品' ? '按子分类分组：' : '按品牌/名称分组：') +
+      '</p><ul class="sub-list">';
+
+    data.groups.forEach(g => {
+      const avgPrice = g.count > 0 ? '均价¥' + (g.total / g.count).toFixed(1) : '';
+      const extra = g.weight_info ? ' | ' + g.weight_info : '';
+      html += `<li style="cursor:pointer;border-radius:8px;padding:8px;margin:0 -8px;" onclick="openSubGroupDetail('${category}','${g.name.replace(/'/g, "\\'")}')" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='transparent'">
+        <div class="left">
+          <span class="title">🏷️ ${g.name} <span style="font-size:0.7rem;color:var(--primary);">›</span></span>
+          <span class="sub">${g.count}次 | ${avgPrice} | 最近：${g.last_date}${extra}</span>
+        </div>
+        <span style="font-weight:700;">¥${g.total}</span>
+      </li>`;
+    });
+    html += '</ul>';
+
+    // 趋势图
+    html += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">' +
+      '<p style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">📈 ' + category + ' 月度趋势</p>' +
+      '<div id="catDetailChartArea" style="position:relative;height:240px;"></div></div>';
+
+    contentEl.innerHTML = html;
+
+    // 渲染小趋势图
+    setTimeout(() => {
+      const area = document.getElementById('catDetailChartArea');
+      if (!area) return;
+      area.innerHTML = '<canvas id="catDetailChart"></canvas>';
+      fetch('/api/category_trend?category=' + encodeURIComponent(category))
+        .then(r => r.json())
+        .then(td => {
+          if (td.months && td.months.length > 0) {
+            const canvas = document.getElementById('catDetailChart');
+            if (canvas) new Chart(canvas, createChartConfig(td.months, td.totals, category));
+          }
+        }).catch(() => {});
+    }, 300);
+  } catch (err) {
+    contentEl.innerHTML = '<p style="color:var(--danger);">加载失败</p>';
+  }
+}
+
+function openSubGroupDetail(category, subName) {
+  document.getElementById('itemDetailModal').classList.add('show');
+  document.getElementById('itemDetailTitle').textContent = '📋 ' + subName + ' 购买记录';
+  const contentEl = document.getElementById('itemDetailContent');
+  contentEl.innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  fetch('/api/category_detail?category=' + encodeURIComponent(category))
+    .then(r => r.json())
+    .then(data => {
+      const group = data.groups.find(g => g.name === subName);
+      if (!group || !group.items || group.items.length === 0) {
+        contentEl.innerHTML = '<p style="text-align:center;color:var(--sub);">暂无记录</p>';
+        return;
+      }
+      let html = '<p style="font-size:0.85rem;color:var(--sub);margin-bottom:8px;">共 ' + group.count + ' 次，总计 ¥' + group.total + '</p><ul class="sub-list">';
+      group.items.forEach(r => {
+        html += `<li>
+          <div class="left">
+            <span class="title">📅 ${r.date}</span>
+            <span class="sub">${r.brand !== '未标注' ? r.brand + ' | ' : ''}${r.notes || ''}</span>
+          </div>
+          <span style="font-weight:700;">¥${r.amount}</span>
+        </li>`;
+      });
+      html += '</ul>';
+      contentEl.innerHTML = html;
+    }).catch(() => {
+      contentEl.innerHTML = '<p style="color:var(--danger);">加载失败</p>';
+    });
+}
+
+function showAllDetails(category) { openCategoryDetail(category); }
+
+// Keep openItemDetail for backward compat with chat links
+async function openItemDetail(category, itemName) {
+  openSubGroupDetail(category, itemName);
+}
+
+// ==================== 聊天中渲染图表 ====================
+let chatChartInstance = null;
+
+async function showChartInModal(category) {
+  document.getElementById('chartModal').classList.add('show');
+  document.getElementById('chartModalContent').innerHTML = '<canvas id="chatChartCanvas"></canvas>';
+
+  try {
+    const canvas = document.getElementById('chatChartCanvas');
+    if (!canvas) return;
+
+    if (chatChartInstance) chatChartInstance.destroy();
+
+    if (category) {
+      // 单一分类趋势
+      const resp = await fetch('/api/category_trend?category=' + encodeURIComponent(category));
+      const data = await resp.json();
+      if (!data.months || data.months.length === 0) {
+        document.getElementById('chartModalContent').innerHTML = '<p style="text-align:center;color:var(--sub);padding:40px;">暂无 ' + category + ' 的花费数据</p>';
+        return;
+      }
+      chatChartInstance = new Chart(canvas, createChartConfig(data.months, data.totals, category));
+    } else {
+      // 全部分类对比
+      const resp = await fetch('/api/monthly_trend');
+      const data = await resp.json();
+      if (!data.months || data.months.length === 0) {
+        document.getElementById('chartModalContent').innerHTML = '<p style="text-align:center;color:var(--sub);padding:40px;">暂无花费数据</p>';
+        return;
+      }
+      chatChartInstance = new Chart(canvas, createMultiChartConfig(data.months, data.categories, '全部分类月度花费趋势对比'));
+    }
+  } catch (err) { console.error(err); }
+}
+let allPhotosCache = [];  // 缓存最近一次加载的照片数据
+
+function formatDateChinese(dateStr) {
+  if (!dateStr) return '未知日期';
+  var parts = dateStr.split('-');
+  return parts[0] + '年' + parts[1] + '月' + parts[2] + '日';
+}
+
+function imgError(el) {
+  el.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--sub);font-size:2rem;">🐱</div>';
+}
+
+function renderGallery(photos) {
+  var container = document.getElementById('galleryContent');
+
+  if (!photos || photos.length === 0) {
+    container.innerHTML = '<p style="text-align:center;color:var(--sub);padding:20px;">该日期暂无照片</p>';
+    return;
+  }
+
+  // 按日期分组
+  var groups = {};
+  photos.forEach(function(p) {
+    var d = p.upload_date || '未知日期';
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(p);
+  });
+
+  // 日期倒序排列（最近的在上面）
+  var sortedDates = Object.keys(groups).sort(function(a, b) { return b.localeCompare(a); });
+
+  var html = '';
+  sortedDates.forEach(function(date) {
+    var dateDisplay = formatDateChinese(date);
+    html += '<div class="gallery-date-group">';
+    html += '<div class="gallery-date-header">📅 ' + dateDisplay + ' <span class="gallery-date-count">(' + groups[date].length + '张)</span></div>';
+    html += '<div class="gallery-grid">';
+    groups[date].forEach(function(p) {
+      html += '<div class="gallery-item" onclick="openImageViewerByDate(\'' + p.upload_date + '\', \'' + p.url + '\')">';
+      html += '<img src="' + p.url + '" loading="lazy" onerror="imgError(this)">';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function filterGalleryByDate() {
+  var dateInput = document.getElementById('galleryDateFilter');
+  var selectedDate = dateInput.value;
+  if (!selectedDate) {
+    renderGallery(allPhotosCache);
+    return;
+  }
+  var filtered = allPhotosCache.filter(function(p) { return p.upload_date === selectedDate; });
+  renderGallery(filtered);
+}
+
+function resetGalleryFilter() {
+  document.getElementById('galleryDateFilter').value = '';
+  renderGallery(allPhotosCache);
+}
+
+async function openGallery() {
+  document.getElementById('galleryModal').classList.add('show');
+  document.getElementById('galleryDateFilter').value = '';
+  document.getElementById('galleryContent').innerHTML = '<p style="text-align:center;color:var(--sub);">加载中...</p>';
+
+  try {
+    var resp = await fetch('/api/photos');
+    var data = await resp.json();
+    allPhotosCache = data.photos;
+    renderGallery(allPhotosCache);
+  } catch (err) {
+    document.getElementById('galleryContent').innerHTML = '<p style="color:var(--danger);text-align:center;">加载失败</p>';
+  }
+}
+
+// ==================== 图片查看器（滚轮切换） ====================
+let viewerImages = [];
+let viewerIndex = 0;
+let viewerDate = '';
+
+function openImageViewerByDate(date, startUrl) {
+  // 从缓存中找出同一天的所有照片
+  viewerDate = date;
+  viewerImages = allPhotosCache.filter(p => p.upload_date === date);
+  if (viewerImages.length === 0) {
+    // fallback: 缓存中没有，至少显示当前这张
+    viewerImages = [{ url: startUrl, upload_date: date, filename: '' }];
+  }
+  viewerIndex = viewerImages.findIndex(p => p.url === startUrl);
+  if (viewerIndex < 0) viewerIndex = 0;
+
+  document.getElementById('imageViewerModal').classList.add('show');
+  updateViewerImage();
+  bindViewerWheel();
+}
+
+function openImageViewerSingle(url) {
+  // 单张图片查看（从聊天中点击）
+  viewerDate = '';
+  viewerImages = [{ url: url, upload_date: '', filename: '' }];
+  viewerIndex = 0;
+
+  document.getElementById('imageViewerModal').classList.add('show');
+  updateViewerImage();
+  bindViewerWheel();
+}
+
+function closeImageViewer() {
+  document.getElementById('imageViewerModal').classList.remove('show');
+}
+
+function updateViewerImage() {
+  const img = document.getElementById('viewerImage');
+  const counter = document.getElementById('viewerCounter');
+  const hint = document.getElementById('viewerHint');
+  const prevBtn = document.getElementById('viewerPrevBtn');
+  const nextBtn = document.getElementById('viewerNextBtn');
+
+  if (viewerImages.length > 0 && viewerIndex >= 0 && viewerIndex < viewerImages.length) {
+    img.src = viewerImages[viewerIndex].url;
+    counter.textContent = (viewerIndex + 1) + ' / ' + viewerImages.length +
+      (viewerDate ? '  |  ' + viewerDate : '');
+
+    const hasMultiple = viewerImages.length > 1;
+    hint.textContent = hasMultiple ? '🖱️ 使用滚轮或点击箭头切换图片' : '';
+    prevBtn.style.display = hasMultiple ? '' : 'none';
+    nextBtn.style.display = hasMultiple ? '' : 'none';
+  }
+}
+
+function nextImage() {
+  if (viewerIndex < viewerImages.length - 1) {
+    viewerIndex++;
+    updateViewerImage();
+  }
+}
+
+function prevImage() {
+  if (viewerIndex > 0) {
+    viewerIndex--;
+    updateViewerImage();
+  }
+}
+
+function bindViewerWheel() {
+  const modal = document.getElementById('imageViewerModal');
+  // 先解绑旧的，避免重复绑定
+  modal.onwheel = null;
+
+  modal.onwheel = function(e) {
+    if (viewerImages.length <= 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.deltaY > 0) {
+      // 向下滚 → 下一张
+      if (viewerIndex < viewerImages.length - 1) {
+        viewerIndex++;
+        updateViewerImage();
+      }
+    } else {
+      // 向上滚 → 上一张
+      if (viewerIndex > 0) {
+        viewerIndex--;
+        updateViewerImage();
+      }
+    }
+  };
+}
+
+// 键盘左右箭头切换
+document.addEventListener('keydown', function(e) {
+  const modal = document.getElementById('imageViewerModal');
+  if (!modal.classList.contains('show')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevImage(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); nextImage(); }
+  if (e.key === 'Escape') { closeImageViewer(); }
+});
+
+// ==================== 键盘 & 触摸 ====================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && document.activeElement === userInput) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// 仪表盘自动刷新定时器
+let dashboardRefreshTimer = null;
+
+// ==================== 日历视图 ====================
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth() + 1;
+let calendarData = null;
+let calendarSelectedDate = null;
+
+const EVENT_TYPE_NAMES = { vaccine: '疫苗', deworm: '驱虫', vet_visit: '就医', dental: '拔牙/口腔', birthday: '生日' };
+const EVENT_TYPE_EMOJI = { vaccine: '💉', deworm: '💊', vet_visit: '🏥', dental: '🦷', birthday: '🎂' };
+let calendarDragData = null;
+
+async function openCalendar() {
+  document.getElementById('calendarModal').classList.add('show');
+  calendarYear = new Date().getFullYear();
+  calendarMonth = new Date().getMonth() + 1;
+  calendarSelectedDate = null;
+  document.getElementById('calendarDayDetail').classList.remove('show');
+  await loadCalendarData();
+}
+
+async function loadCalendarData() {
+  try {
+    var resp = await fetch('/api/calendar?year=' + calendarYear + '&month=' + calendarMonth);
+    calendarData = await resp.json();
+    renderCalendar();
+  } catch (err) {
+    document.getElementById('calendarGrid').innerHTML = '<p style="color:var(--danger);text-align:center;padding:20px;">加载失败</p>';
+  }
+}
+
+function calendarPrevMonth() {
+  if (calendarMonth === 1) { calendarMonth = 12; calendarYear--; }
+  else { calendarMonth--; }
+  calendarSelectedDate = null;
+  document.getElementById('calendarDayDetail').classList.remove('show');
+  loadCalendarData();
+}
+
+function calendarNextMonth() {
+  if (calendarMonth === 12) { calendarMonth = 1; calendarYear++; }
+  else { calendarMonth++; }
+  calendarSelectedDate = null;
+  document.getElementById('calendarDayDetail').classList.remove('show');
+  loadCalendarData();
+}
+
+function calendarGoToday() {
+  calendarYear = new Date().getFullYear();
+  calendarMonth = new Date().getMonth() + 1;
+  calendarSelectedDate = null;
+  document.getElementById('calendarDayDetail').classList.remove('show');
+  loadCalendarData();
+}
+
+function buildDateMaps() {
+  var eventMap = {};
+  var expenseMap = {};
+  var weightMap = {};
+  var photoSet = new Set();
+
+  (calendarData.events || []).forEach(function(ev) {
+    var d = ev.date;
+    if (!eventMap[d]) eventMap[d] = [];
+    eventMap[d].push(ev);
+    if (ev.next_due_date && ev.next_due_date !== ev.date) {
+      if (!eventMap[ev.next_due_date]) eventMap[ev.next_due_date] = [];
+      eventMap[ev.next_due_date].push(Object.assign({}, ev, { _isDue: true }));
+    }
+  });
+
+  (calendarData.expenses || []).forEach(function(ex) {
+    var d = ex.date;
+    if (!expenseMap[d]) expenseMap[d] = [];
+    expenseMap[d].push(ex);
+  });
+
+  (calendarData.weights || []).forEach(function(w) {
+    var d = w.date;
+    if (!weightMap[d]) weightMap[d] = [];
+    weightMap[d].push(w);
+  });
+
+  (calendarData.photo_dates || []).forEach(function(d) { photoSet.add(d); });
+
+  return { eventMap: eventMap, expenseMap: expenseMap, weightMap: weightMap, photoSet: photoSet };
+}
+
+function renderCalendar() {
+  document.getElementById('calendarMonthTitle').textContent = calendarYear + '年 ' + calendarMonth + '月';
+
+  var maps = buildDateMaps();
+  var eventMap = maps.eventMap;
+  var expenseMap = maps.expenseMap;
+  var weightMap = maps.weightMap;
+  var photoSet = maps.photoSet;
+
+  var firstDay = new Date(calendarYear, calendarMonth - 1, 1).getDay();
+  var daysInMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+  var daysInPrevMonth = new Date(calendarYear, calendarMonth - 1, 0).getDate();
+
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' +
+    String(today.getMonth() + 1).padStart(2, '0') + '-' +
+    String(today.getDate()).padStart(2, '0');
+
+  var html = '';
+  var dayCount = 0;
+
+  // 上月末尾填充
+  for (var i = firstDay - 1; i >= 0; i--) {
+    var day = daysInPrevMonth - i;
+    var pm = calendarMonth === 1 ? 12 : calendarMonth - 1;
+    var py = calendarMonth === 1 ? calendarYear - 1 : calendarYear;
+    var dateStr = py + '-' + String(pm).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+    html += renderDayCell(day, dateStr, true, eventMap, expenseMap, weightMap, photoSet, todayStr);
+    dayCount++;
+  }
+
+  // 当月日期
+  for (var day = 1; day <= daysInMonth; day++) {
+    var dateStr = calendarYear + '-' + String(calendarMonth).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+    html += renderDayCell(day, dateStr, false, eventMap, expenseMap, weightMap, photoSet, todayStr);
+    dayCount++;
+  }
+
+  // 下月开头填充
+  var remaining = (7 - (dayCount % 7)) % 7;
+  for (var day = 1; day <= remaining; day++) {
+    var nm = calendarMonth === 12 ? 1 : calendarMonth + 1;
+    var ny = calendarMonth === 12 ? calendarYear + 1 : calendarYear;
+    var dateStr = ny + '-' + String(nm).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+    html += renderDayCell(day, dateStr, true, eventMap, expenseMap, weightMap, photoSet, todayStr);
+    dayCount++;
+  }
+
+  document.getElementById('calendarGrid').innerHTML = html;
+
+  // 恢复选中日的详情
+  if (calendarSelectedDate) {
+    showDayDetail(calendarSelectedDate, maps);
+  }
+
+  // 绑定拖拽
+  setupDragAndDrop();
+}
+
+function renderDayCell(day, dateStr, isOtherMonth, eventMap, expenseMap, weightMap, photoSet, todayStr) {
+  var isToday = dateStr === todayStr;
+  var dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+  var isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  var isSelected = dateStr === calendarSelectedDate;
+
+  var classes = 'calendar-day-cell';
+  if (isOtherMonth) classes += ' other-month';
+  if (isToday) classes += ' today';
+  if (isSelected) classes += ' selected';
+
+  // 事件圆点（去重）
+  var eventDots = '';
+  var dayEvents = eventMap[dateStr] || [];
+  var seenIds = {};
+  dayEvents.forEach(function(ev) {
+    if (seenIds[ev.id]) return;
+    seenIds[ev.id] = true;
+    var title = (EVENT_TYPE_NAMES[ev.type] || ev.type) + (ev._isDue ? '(到期)' : '');
+    eventDots += '<span class="calendar-event-dot ' + ev.type + '" data-event-id="' + ev.id + '" data-event-date="' + ev.date + '" draggable="true" title="' + title + '"></span>';
+  });
+
+  // 底部指标
+  var indicators = '';
+  var dayExpenses = expenseMap[dateStr] || [];
+  if (dayExpenses.length > 0) {
+    var total = dayExpenses.reduce(function(s, ex) { return s + ex.amount; }, 0);
+    indicators += '<span title="花费 ¥' + total.toFixed(0) + '">💰</span>';
+  }
+  if ((weightMap[dateStr] || []).length > 0) {
+    indicators += '<span title="体重记录">⚖</span>';
+  }
+  if (photoSet.has(dateStr)) {
+    indicators += '<span title="有照片">📷</span>';
+  }
+
+  return '<div class="' + classes + '" data-date="' + dateStr + '" onclick="selectCalendarDay(\'' + dateStr + '\')" ondragover="calendarDragOver(event)" ondragleave="calendarDragLeave(event)" ondrop="calendarDrop(event, \'' + dateStr + '\')">' +
+    '<span class="calendar-day-num' + (isWeekend ? ' weekend-num' : '') + '">' + day + '</span>' +
+    '<div class="calendar-event-dots">' + eventDots + '</div>' +
+    '<div class="calendar-day-indicators">' + indicators + '</div>' +
+    '</div>';
+}
+
+function selectCalendarDay(dateStr) {
+  calendarSelectedDate = dateStr;
+  if (!calendarData) return;
+  renderCalendar();
+}
+
+function showDayDetail(dateStr, maps) {
+  var eventMap = maps.eventMap;
+  var expenseMap = maps.expenseMap;
+  var weightMap = maps.weightMap;
+  var photoSet = maps.photoSet;
+
+  var detailDiv = document.getElementById('calendarDayDetail');
+  var titleEl = document.getElementById('calendarDetailTitle');
+  var contentEl = document.getElementById('calendarDetailContent');
+
+  var dt = new Date(dateStr + 'T00:00:00');
+  var weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
+  titleEl.textContent = '📋 ' + dt.getFullYear() + '年' + (dt.getMonth() + 1) + '月' + dt.getDate() + '日 周' + weekDayNames[dt.getDay()];
+
+  var html = '';
+
+  // 事件
+  var dayEvents = eventMap[dateStr] || [];
+  var seenIds = {};
+  var uniqueEvents = [];
+  dayEvents.forEach(function(ev) {
+    if (!seenIds[ev.id]) {
+      seenIds[ev.id] = true;
+      uniqueEvents.push(ev);
+    }
+  });
+
+  if (uniqueEvents.length > 0) {
+    html += '<div class="detail-section"><div class="section-title">📅 事件</div>';
+    uniqueEvents.forEach(function(ev) {
+      var typeName = EVENT_TYPE_NAMES[ev.type] || ev.type;
+      var emoji = EVENT_TYPE_EMOJI[ev.type] || '';
+      var label = ev._isDue ? typeName + ' 到期' : typeName;
+      html += '<div class="detail-item" draggable="true" data-event-id="' + ev.id + '" data-event-date="' + ev.date + '">' +
+        '<span><span class="drag-handle">⠿</span>' + emoji + ' ' + label + '</span>' +
+        '<span style="color:var(--sub);font-size:0.8rem;">' + (ev.notes || '') + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 花费
+  var dayExpenses = expenseMap[dateStr] || [];
+  if (dayExpenses.length > 0) {
+    html += '<div class="detail-section"><div class="section-title">💰 花费 (' + dayExpenses.length + '笔)</div>';
+    dayExpenses.forEach(function(ex) {
+      html += '<div class="detail-item">' +
+        '<span>' + ex.category + (ex.brand ? ' · ' + ex.brand : '') + '</span>' +
+        '<span style="font-weight:600;">¥' + ex.amount.toFixed(2) + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 体重
+  var dayWeights = weightMap[dateStr] || [];
+  if (dayWeights.length > 0) {
+    html += '<div class="detail-section"><div class="section-title">⚖ 体重</div>';
+    dayWeights.forEach(function(w) {
+      html += '<div class="detail-item"><span>体重</span><span style="font-weight:600;">' + w.weight + 'kg</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // 照片
+  if (photoSet.has(dateStr)) {
+    html += '<div class="detail-section"><div class="section-title">📷 照片</div>' +
+      '<div class="detail-item" style="cursor:pointer;color:var(--primary);" onclick="viewDayPhotos(\'' + dateStr + '\')">点击查看当天照片 →</div>' +
+      '</div>';
+  }
+
+  if (!html) {
+    html = '<p style="color:var(--sub);text-align:center;padding:8px;">当天无记录</p>';
+  }
+
+  contentEl.innerHTML = html;
+  detailDiv.classList.add('show');
+
+  // 绑定详情面板内的拖拽
+  var dragItems = detailDiv.querySelectorAll('.detail-item[draggable]');
+  for (var i = 0; i < dragItems.length; i++) {
+    dragItems[i].addEventListener('dragstart', calendarDragStart);
+    dragItems[i].addEventListener('dragend', calendarDragEnd);
+  }
+}
+
+function viewDayPhotos(dateStr) {
+  closeSubModal('calendarModal');
+  // 打开相册，加载完成后筛选日期
+  openGallery().then(function() {
+    document.getElementById('galleryDateFilter').value = dateStr;
+    filterGalleryByDate();
+  });
+}
+
+// ==================== 日历拖拽 ====================
+function setupDragAndDrop() {
+  var dots = document.querySelectorAll('.calendar-event-dot[draggable]');
+  for (var i = 0; i < dots.length; i++) {
+    dots[i].addEventListener('dragstart', calendarDragStart);
+    dots[i].addEventListener('dragend', calendarDragEnd);
+  }
+}
+
+function calendarDragStart(e) {
+  calendarDragData = {
+    eventId: parseInt(this.getAttribute('data-event-id')),
+    eventDate: this.getAttribute('data-event-date')
+  };
+  this.style.opacity = '0.4';
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.getAttribute('data-event-id'));
+  }
+}
+
+function calendarDragEnd(e) {
+  this.style.opacity = '';
+  var cells = document.querySelectorAll('.calendar-day-cell.drag-over');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].classList.remove('drag-over');
+  }
+}
+
+function calendarDragOver(e) {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  this.classList.add('drag-over');
+}
+
+function calendarDragLeave(e) {
+  this.classList.remove('drag-over');
+}
+
+async function calendarDrop(e, targetDate) {
+  e.preventDefault();
+  this.classList.remove('drag-over');
+
+  if (!calendarDragData) return;
+  if (calendarDragData.eventDate === targetDate) return;
+
+  var eventId = calendarDragData.eventId;
+  var oldDate = calendarDragData.eventDate;
+
+  try {
+    var resp = await fetch('/api/event/' + eventId + '/move', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: targetDate })
+    });
+    var result = await resp.json();
+
+    if (result.status === 'ok') {
+      calendarSelectedDate = targetDate;
+      await loadCalendarData();
+      showDragToast(result.message);
+    } else {
+      alert('调整失败：' + (result.error || '未知错误'));
+    }
+  } catch (err) {
+    console.error('拖拽调整失败', err);
+    alert('调整失败，请重试');
+  }
+}
+
+var dragToastTimer = null;
+function showDragToast(msg) {
+  var existing = document.getElementById('calendarDragToast');
+  if (existing) existing.remove();
+  if (dragToastTimer) clearTimeout(dragToastTimer);
+
+  var el = document.createElement('div');
+  el.id = 'calendarDragToast';
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#22c55e;color:white;padding:10px 24px;border-radius:22px;font-size:0.9rem;font-weight:600;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:fadeInUp .3s ease;pointer-events:none;';
+  document.body.appendChild(el);
+
+  dragToastTimer = setTimeout(function() {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .3s';
+    setTimeout(function() { el.remove(); }, 300);
+  }, 2000);
+}
+
+// 点击遮罩关闭弹窗
+['dashboardModal', 'eventsModal', 'expenseModal', 'galleryModal', 'categoryDetailModal', 'itemDetailModal', 'chartModal', 'imageViewerModal', 'calendarModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('show');
+  });
+});
+</script>
+</body>
+</html>
