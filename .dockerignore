@@ -9,5 +9,4 @@ __pycache__
 start.bat
 start.ps1
 start.sh
-exported_data.json
 .imported_done
