@@ -20,7 +20,7 @@ import asyncio
 import random
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 
 import httpx
 from typing import List
@@ -2308,13 +2308,6 @@ async def scheduler_loop():
         daily_reminder_job()
 
 
-def start_scheduler():
-    """启动后台定时任务"""
-    loop = asyncio.get_event_loop()
-    loop.create_task(scheduler_loop())
-    print("✅ 定时任务已启动（每天 8:00 检查提醒）")
-
-
 # 启动时初始化数据库
 init_db()
 
@@ -2362,9 +2355,19 @@ def import_data_if_needed():
     print("[数据导入] 完成，已删除 exported_data.json\n")
 
 
-def lifespan(app: FastAPI):
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ----- 启动 -----
     import_data_if_needed()
+    asyncio.create_task(scheduler_loop())
+    print("✅ 定时任务已启动（每天 8:00 检查提醒）")
+    print("\n🐱 猫咪私人助理 启动中...")
+    print(f"   📱 本机访问: http://localhost:8001")
+    print(f"   📱 局域网访问: http://<你的电脑IP>:8001")
+    print(f"   🔑 请确保已设置 DEEPSEEK_API_KEY 环境变量\n")
     yield
+    # ----- 关闭 -----
+    print("🛑 猫咪助理已关闭")
 
 app.router.lifespan_context = lifespan
 
