@@ -4,6 +4,7 @@ __pycache__
 .gitignore
 *.db
 *.json
+!exported_data.json
 *.md
 start.bat
 start.ps1
