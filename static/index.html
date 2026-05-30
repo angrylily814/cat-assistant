@@ -672,6 +672,7 @@ body {
     <button onclick="openDashboard()" title="仪表盘">📊</button>
     <button onclick="openCalendar()" title="日历">📅</button>
     <button onclick="clearChat()" class="danger" title="清空对话">🔄</button>
+    <button onclick="logout()" title="退出登录" style="background:#ef4444;color:white;border-radius:8px;font-size:0.75rem;">🚪</button>
   </div>
 </div>
 
@@ -1280,6 +1281,25 @@ function clearChat() {
   updateEmptyState();
   chatContainer.appendChild(emptyState);
 }
+
+function logout() {
+  fetch('/logout', { method: 'POST' }).then(function() {
+    window.location.href = '/login';
+  });
+}
+
+// 全局拦截：401 自动跳转登录页
+(function() {
+  var origFetch = window.fetch;
+  window.fetch = function() {
+    return origFetch.apply(this, arguments).then(function(resp) {
+      if (resp.status === 401) {
+        window.location.href = '/login';
+      }
+      return resp;
+    });
+  };
+})();
 
 // ==================== 仪表盘 ====================
 async function openDashboard() {

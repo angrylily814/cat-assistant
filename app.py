@@ -25,7 +25,7 @@ from contextlib import contextmanager
 import httpx
 from typing import List
 from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # ===================== 配置 =====================
@@ -65,6 +65,100 @@ if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == _DEFAULT_KEY:
         DEEPSEEK_API_KEY = _DEFAULT_KEY
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = "deepseek-chat"
+
+# ===================== 登录认证 =====================
+import hmac
+import hashlib
+import time as _time
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "cat-assistant-secret-key-change-in-production")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "cat123")
+COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 天
+
+
+def _make_token():
+    """生成带签名和过期时间的认证 token"""
+    ts = str(int(_time.time()))
+    payload = f"auth:{ts}"
+    sig = hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def _verify_token(token):
+    """验证 token 签名和过期时间，返回 True/False"""
+    try:
+        parts = token.rsplit(":", 1)
+        payload = parts[0]
+        sig = parts[1]
+        expected = hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return False
+        # 检查是否过期
+        prefix, ts = payload.split(":", 1)
+        if prefix != "auth":
+            return False
+        elapsed = int(_time.time()) - int(ts)
+        return elapsed < COOKIE_MAX_AGE
+    except Exception:
+        return False
+
+# 无需登录即可访问的路径前缀
+PUBLIC_PREFIXES = ["/static", "/photos", "/login", "/manifest.json", "/favicon.ico"]
+
+# 登录页面 HTML
+LOGIN_HTML = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>猫咪私人助理 — 登录</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(135deg, #fef9ef 0%, #fff5eb 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.card {
+  background: #fff; border-radius: 20px; padding: 40px 32px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.08); width: 360px; max-width: 90vw;
+  text-align: center;
+}
+.icon { font-size: 3rem; margin-bottom: 8px; }
+h1 { font-size: 1.3rem; color: #333; margin-bottom: 4px; }
+.sub { font-size: .85rem; color: #999; margin-bottom: 24px; }
+.input-wrap {
+  display: flex; gap: 10px; margin-bottom: 14px;
+}
+.input-wrap input {
+  flex:1; padding: 12px 16px; border: 2px solid #eee; border-radius: 12px;
+  font-size: 1rem; outline: none; transition: border-color .2s;
+}
+.input-wrap input:focus { border-color: #f97316; }
+.input-wrap button {
+  padding: 12px 20px; background: #f97316; color: #fff; border: none;
+  border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer;
+  transition: background .2s;
+}
+.input-wrap button:hover { background: #ea580c; }
+.error { color: #ef4444; font-size: .85rem; min-height: 20px; margin-bottom: 8px; }
+.hint { font-size: .75rem; color: #bbb; }
+</style>
+</head>
+<body>
+<form class="card" method="post" action="/login">
+  <div class="icon">🐱</div>
+  <h1>猫咪私人助理</h1>
+  <p class="sub">请输入密码</p>
+  <div class="error">%ERROR%</div>
+  <div class="input-wrap">
+    <input type="password" name="password" placeholder="密码" autofocus required>
+    <button type="submit">登录</button>
+  </div>
+  <p class="hint">密码由管理员设置</p>
+</form>
+</body>
+</html>"""
 
 app = FastAPI(title="猫咪私人助理")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -1369,6 +1463,73 @@ async def call_deepseek(messages: list) -> dict:
             return {"role": "assistant",
                     "content": f"⚠️ API 调用失败 (HTTP {resp.status_code}): {error_detail}"}
         return resp.json()
+
+
+# ===================== 认证中间件 =====================
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """全局认证中间件：检查 auth_token cookie"""
+    path = request.url.path
+
+    # 公开路径：无需登录
+    is_public = any(
+        path == pfx or path.startswith(pfx + "/") or path.startswith(pfx + "?")
+        for pfx in PUBLIC_PREFIXES
+    )
+    if is_public:
+        return await call_next(request)
+
+    # 检查认证 cookie
+    token = request.cookies.get("auth_token")
+    if token and _verify_token(token):
+        return await call_next(request)
+
+    # 未认证 → API 返回 401，页面请求重定向
+    if path.startswith("/api") or path.startswith("/chat") or path.startswith("/upload"):
+        return JSONResponse({"error": "unauthorized", "redirect": "/login"}, status_code=401)
+
+    return RedirectResponse(url=f"/login?next={path}", status_code=302)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """登录页面"""
+    error = request.query_params.get("error", "")
+    html = LOGIN_HTML.replace("%ERROR%", f"⚠️ {error}" if error else "")
+    return html
+
+
+@app.post("/login")
+async def login(request: Request):
+    """处理登录请求"""
+    form = await request.form()
+    password = form.get("password", "")
+
+    if password != APP_PASSWORD:
+        return RedirectResponse(url="/login?error=密码错误，请重试", status_code=302)
+
+    # 生成签名 token
+    token = _make_token()
+    next_url = request.query_params.get("next", "/")
+
+    response = RedirectResponse(url=next_url, status_code=302)
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/logout")
+async def logout():
+    """退出登录"""
+    response = RedirectResponse(url="/login", status_code=302)
+    response.delete_cookie("auth_token")
+    return response
 
 
 # ===================== FastAPI 路由 =====================
