@@ -2,8 +2,10 @@
 *.db
 
 # Data export/import
+# exported_data.json is ignored by default. To push to Railway:
+#   git add -f exported_data.json
 exported_data.json
-.imported_done
+.data_imported
 
 # Python
 __pycache__/

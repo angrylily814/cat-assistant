@@ -2319,6 +2319,56 @@ def start_scheduler():
 init_db()
 
 
+def import_data_if_needed():
+    """启动时检查 exported_data.json 并导入数据到 SQLite"""
+    import_file = BASE_DIR / "exported_data.json"
+    done_marker = BASE_DIR / ".data_imported"
+
+    if not import_file.exists():
+        return
+    if done_marker.exists():
+        return
+
+    print("\n[数据导入] 检测到 exported_data.json，开始导入...")
+    try:
+        data = json.loads(import_file.read_text(encoding='utf-8'))
+    except Exception as e:
+        print(f"[数据导入] 读取文件失败: {e}")
+        return
+
+    import_order = [
+        "cat_info", "context_settings", "events", "expenses",
+        "inventory", "photos", "toys", "weight_records",
+    ]
+    with get_db() as conn:
+        for table in import_order:
+            rows = data.get(table, [])
+            if not rows:
+                continue
+            cols = list(rows[0].keys())
+            ph = ", ".join(["?"] * len(cols))
+            sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({ph})"
+            count = 0
+            for row in rows:
+                try:
+                    conn.execute(sql, [row[c] for c in cols])
+                    count += 1
+                except Exception as e:
+                    print(f"[数据导入] {table} 失败: {e}")
+            print(f"[数据导入] {table}: {count} 条")
+
+    done_marker.write_text("ok")
+    import_file.unlink()
+    print("[数据导入] 完成，已删除 exported_data.json\n")
+
+
+def lifespan(app: FastAPI):
+    import_data_if_needed()
+    yield
+
+app.router.lifespan_context = lifespan
+
+
 def kill_port_process(port: int):
     """释放指定端口：查找并终止占用进程（Windows）"""
     import subprocess
