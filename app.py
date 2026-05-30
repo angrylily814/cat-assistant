@@ -20,7 +20,7 @@ import asyncio
 import random
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import contextmanager
 
 import httpx
 from typing import List
@@ -2147,76 +2147,15 @@ async def scheduler_loop():
         daily_reminder_job()
 
 
-async def start_scheduler():
+def start_scheduler():
     """启动后台定时任务"""
-    asyncio.create_task(scheduler_loop())
+    loop = asyncio.get_event_loop()
+    loop.create_task(scheduler_loop())
     print("✅ 定时任务已启动（每天 8:00 检查提醒）")
 
 
-# ===================== 启动 =====================
-
-@asynccontextmanager
-def import_data_if_needed():
-    """启动时检查 exported_data.json 并导入数据（用于云端迁移）"""
-    import_file = BASE_DIR / "exported_data.json"
-    done_marker = BASE_DIR / ".imported_done"
-
-    if not import_file.exists():
-        return
-    if done_marker.exists():
-        return
-
-    print("\n📥 检测到数据导入文件，开始导入...")
-    try:
-        data = json.loads(import_file.read_text(encoding='utf-8'))
-    except Exception as e:
-        print(f"   ❌ 读取导入文件失败: {e}")
-        return
-
-    # 导入顺序：先导入有主表依赖关系的表
-    import_order = [
-        "cat_info",
-        "context_settings",
-        "events",
-        "expenses",
-        "inventory",
-        "photos",
-        "toys",
-        "weight_records",
-    ]
-    with get_db() as conn:
-        for table in import_order:
-            rows = data.get(table, [])
-            if not rows:
-                continue
-            cols = list(rows[0].keys())
-            placeholders = ", ".join(["?"] * len(cols))
-            sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
-            count = 0
-            for row in rows:
-                try:
-                    conn.execute(sql, [row[c] for c in cols])
-                    count += 1
-                except Exception as e:
-                    print(f"   ⚠️ {table} 行导入失败: {e}")
-            print(f"   ✅ {table}: {count} 条记录")
-
-    done_marker.write_text("ok")
-    import_file.unlink()
-    print(f"   🗑️  已删除导入文件，导入完成\n")
-
-
-async def lifespan(app: FastAPI):
-    import_data_if_needed()
-    init_db()
-    await start_scheduler()
-    print("\n🐱 猫咪私人助理 启动中...")
-    print(f"   📱 本机访问: http://localhost:8001")
-    print(f"   📱 局域网访问: http://<你的电脑IP>:8001")
-    print(f"   🔑 请确保已设置 DEEPSEEK_API_KEY 环境变量\n")
-    yield
-
-app.router.lifespan_context = lifespan
+# 启动时初始化数据库
+init_db()
 
 
 def kill_port_process(port: int):
@@ -2243,7 +2182,7 @@ def kill_port_process(port: int):
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8001))
 
     # Windows 本地开发：自动释放被占用的端口
     if sys.platform == 'win32':
