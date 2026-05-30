@@ -103,7 +103,7 @@ def _verify_token(token):
         return False
 
 # 无需登录即可访问的路径前缀
-PUBLIC_PREFIXES = ["/static", "/photos", "/login", "/manifest.json", "/favicon.ico"]
+PUBLIC_PREFIXES = ["/static", "/photos", "/login", "/manifest.json", "/favicon.ico", "/debug/import"]
 
 # 登录页面 HTML
 LOGIN_HTML = """<!DOCTYPE html>
@@ -1779,6 +1779,13 @@ async def debug_weights():
     })
 
 
+@app.get("/debug/import")
+async def debug_import():
+    """调试接口：手动触发数据导入，返回详细日志和统计"""
+    result = import_data_once()
+    return JSONResponse(result)
+
+
 @app.delete("/api/expense/last")
 async def delete_last_expense():
     """删除最新的一条花费记录"""
@@ -2312,53 +2319,79 @@ async def scheduler_loop():
 init_db()
 
 
-def import_data_if_needed():
-    """启动时检查 exported_data.json 并导入数据到 SQLite"""
-    import_file = BASE_DIR / "exported_data.json"
-    done_marker = BASE_DIR / ".data_imported"
+def import_data_once():
+    """
+    导入 exported_data.json 到 SQLite（如果存在）。
+    每次启动都尝试导入（INSERT OR IGNORE 避免重复），无标记文件。
+    返回日志列表供调试接口使用。
+    """
+    logs = []
+    def log(msg):
+        logs.append(msg)
+        print(f"[数据导入] {msg}")
 
-    if not import_file.exists():
-        return
-    if done_marker.exists():
-        return
+    import os as _os
+    log(f"工作目录: {_os.getcwd()}")
 
-    print("\n[数据导入] 检测到 exported_data.json，开始导入...")
+    # 尝试多个路径
+    candidates = [
+        BASE_DIR / "exported_data.json",
+        Path("/app/exported_data.json"),
+    ]
+    import_file = None
+    for p in candidates:
+        exists = p.exists()
+        log(f"检查 {p} → {'存在' if exists else '不存在'}")
+        if exists:
+            import_file = p
+            break
+
+    if import_file is None:
+        log("未找到 exported_data.json，跳过导入")
+        return {"status": "skipped", "reason": "file not found", "logs": logs}
+
     try:
         data = json.loads(import_file.read_text(encoding='utf-8'))
     except Exception as e:
-        print(f"[数据导入] 读取文件失败: {e}")
-        return
+        log(f"读取文件失败: {e}")
+        return {"status": "error", "reason": str(e), "logs": logs}
 
     import_order = [
         "cat_info", "context_settings", "events", "expenses",
         "inventory", "photos", "toys", "weight_records",
     ]
-    with get_db() as conn:
-        for table in import_order:
-            rows = data.get(table, [])
-            if not rows:
-                continue
-            cols = list(rows[0].keys())
-            ph = ", ".join(["?"] * len(cols))
-            sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({ph})"
-            count = 0
-            for row in rows:
-                try:
-                    conn.execute(sql, [row[c] for c in cols])
-                    count += 1
-                except Exception as e:
-                    print(f"[数据导入] {table} 失败: {e}")
-            print(f"[数据导入] {table}: {count} 条")
+    stats = {}
+    try:
+        with get_db() as conn:
+            for table in import_order:
+                rows = data.get(table, [])
+                if not rows:
+                    stats[table] = {"json_rows": 0, "inserted": 0}
+                    continue
+                cols = list(rows[0].keys())
+                ph = ", ".join(["?"] * len(cols))
+                sql = f"INSERT OR IGNORE INTO {table} ({', '.join(cols)}) VALUES ({ph})"
+                count = 0
+                for row in rows:
+                    try:
+                        conn.execute(sql, [row[c] for c in cols])
+                        count += 1
+                    except Exception as e:
+                        log(f"{table} 行失败: {e}")
+                stats[table] = {"json_rows": len(rows), "inserted": count}
+                log(f"{table}: JSON {len(rows)} 条, 新插入 {count} 条")
+        log("导入完成")
+    except Exception as e:
+        log(f"数据库写入失败: {e}")
+        return {"status": "error", "reason": str(e), "logs": logs}
 
-    done_marker.write_text("ok")
-    import_file.unlink()
-    print("[数据导入] 完成，已删除 exported_data.json\n")
+    return {"status": "ok", "stats": stats, "logs": logs}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ----- 启动 -----
-    import_data_if_needed()
+    import_data_once()
     asyncio.create_task(scheduler_loop())
     print("✅ 定时任务已启动（每天 8:00 检查提醒）")
     print("\n🐱 猫咪私人助理 启动中...")
