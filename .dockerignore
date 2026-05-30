@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.db
+*.json
+*.md
+start.bat
+start.ps1
+start.sh
+exported_data.json
+.imported_done
