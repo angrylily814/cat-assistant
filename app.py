@@ -621,7 +621,7 @@ FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "delete_expense",
-            "description": "删除指定的花费记录。必须先调用 search_expense 找到记录并让用户确认后，再用此函数执行删除。",
+            "description": "登记删除花费记录的请求。注意：本函数只登记、不会立即删除！必须先调用 search_expense 找到记录并向用户展示，再调用本函数登记，然后询问用户是否确认删除。真正的删除由系统在用户明确确认后自动执行，若系统通知已删除则不要再调用本函数。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -723,7 +723,7 @@ def build_system_prompt():
 - 当用户记录体重时（如"体重5.2kg""今天称了4.4kg""5月26日体重4.4kg"），调用 add_weight_record；日期未说明则默认今天({today})
 - 用户询问体重变化时，调用 query_weight_trend
 - 用户询问库存/猫粮问题时，调用 query_inventory 或 calculate_food_days
-- 花费记录（极重要）：用户说"记录""记一笔""花了""买了""消费"等涉及花费时，必须调用 add_expense；金额必填，日期未说明则默认今天({today})
+- 花费记录（极重要）：用户说"记录""记一笔""花了""买了""消费"等涉及花费时，你【必须调用 add_expense 函数】来写入数据库。严禁在文字中假装已记录而不调用函数。每一条花费都要单独调用一次 add_expense。金额必填，日期未说明则默认今天({today})。所有花费记录完成后，必须调用 query_expenses 从数据库实际读取数据来确认写入成功，不要编造数据。
 - 如果用户说"不喜欢"或"讨厌"某个玩具，调用 set_toy_preference 设 preference=dislike
 - 如果用户说"喜欢"某个玩具，调用 set_toy_preference 设 preference=like
 - 查询花费时自动做品牌分析和月度对比
@@ -735,7 +735,10 @@ def build_system_prompt():
 - 可选状态：减肥中、生病中、恢复期、挑食中、活泼好动、安静嗜睡
 
 删除/修改花费规则（重要）：
-- 删除：用户想删除花费时，不要直接删！先调用 search_expense 搜索，展示结果并确认，再调用 delete_expense
+- 删除（两段式，必须经用户确认）：
+  * 第一步：调用 search_expense 找到候选记录，把记录（含ID、日期、金额）展示给用户
+  * 第二步：调用 delete_expense 登记删除请求——注意：该函数只登记、不会真正删除！返回 pending_confirm 后你必须询问用户是否确认删除，在用户确认前绝对不能声称已删除
+  * 用户明确确认（如回复「确认」「确认删除」或直接说「删125」「删除ID 125」）后，系统会自动执行删除，并通过[系统通知]告知你结果；你直接根据系统通知如实回复用户即可，不要再调用 delete_expense
 - 修改（极重要）：用户说"把XX改成YY""加上备注""补充一下""修改一下"等想要修改已有记录时：
   * 第一步：调用 query_expenses 或 search_expense 找到要修改的记录和它的 id
   * 第二步：调用 update_expense(expense_id=id, 只传需要修改的字段) 执行修改
@@ -754,8 +757,10 @@ def build_system_prompt():
 - 如果搜不到照片，告知用户该日期没有照片
 
 - 用口语化、温暖的中文回复，不要用 markdown 格式（纯文本即可）
+- 数据真实性（最高优先级）：你只能使用 function 返回的真实数据。严禁编造任何金额、体重、日期或记录。如果你没有调用函数获得数据，就老实说"让我查一下"。不要假装已记录——只有 function 返回 status=ok 才算真正写入成功。汇总数据时必须调用 query 函数从数据库读取，不能凭记忆或推测。
+- 如果用户让你"记录"或"汇总"，第一步永远是调用对应的 add 函数写入，第二步调用 query 函数从数据库读出确认，第三步才输出结果。跳过第一步直接编造数据是严重错误。
 
-每次回复时，先判断用户意图，调用合适的 function 获取/写入数据，然后基于返回的数据给出友好回答。"""
+每次回复时，先判断用户意图，调用合适的 function 获取/写入数据，然后基于返回的【真实数据】给出友好回答。绝对不要在没有调用函数的情况下假装数据已记录。"""
 
 
 # ===================== Function 实现 =====================
@@ -777,10 +782,21 @@ def fn_add_event(type: str, date: str, next_due_date: str = None, notes: str = N
 
 
 def fn_add_expense(date: str = None, category: str = None, brand: str = None, amount: float = 0, notes: str = None):
+    # 输入验证：确保必填字段有效
+    VALID_CATEGORIES = ["猫粮", "玩具", "医疗", "猫砂", "零食", "用品", "其他"]
+    if not category or category not in VALID_CATEGORIES:
+        return {"status": "error", "message": f"无效的花费分类「{category}」，请从以下选择：{', '.join(VALID_CATEGORIES)}"}
+    if not amount or amount <= 0:
+        return {"status": "error", "message": f"金额必须大于0，收到：{amount}"}
     if date is None:
         date = date.today().strftime('%Y-%m-%d')
+    # 验证日期格式
+    try:
+        datetime.strptime(date, '%Y-%m-%d')
+    except (ValueError, TypeError):
+        return {"status": "error", "message": f"日期格式无效「{date}」，请使用 YYYY-MM-DD 格式"}
     with get_db() as conn:
-        # 去重：5分钟内完全相同的不重复插入（防止 AI 多轮 function calling 重复提交）
+        # 去重：完全相同的不重复插入（防止 AI 多轮 function calling 重复提交）
         existing = conn.execute(
             """SELECT id FROM expenses
                WHERE date = ? AND category = ? AND COALESCE(brand,'') = COALESCE(?,'')
@@ -819,6 +835,13 @@ def fn_add_weight_record(date: str = None, weight: float = 0, notes: str = None)
     if date is None:
         date = date.today().strftime('%Y-%m-%d')
     with get_db() as conn:
+        # 去重：同一天相同体重不重复插入
+        existing = conn.execute(
+            "SELECT id FROM weight_records WHERE date = ? AND ABS(weight - ?) < 0.01 LIMIT 1",
+            (date, weight)
+        ).fetchone()
+        if existing:
+            return {"status": "skipped", "message": f"已跳过重复记录：{date} {weight:.2f}kg"}
         conn.execute(
             "INSERT INTO weight_records (date, weight, notes) VALUES (?, ?, ?)",
             (date, weight, notes)
@@ -1265,6 +1288,32 @@ def fn_delete_expense(expense_id: int, confirmed: bool = False):
         return {"status": "ok", "message": f"已成功删除该笔花费记录。（{info}）"}
 
 
+# 待用户确认的删除请求：{expense_id: 记录信息}
+# LLM 调用 delete_expense 只会登记到这里，真正的删除必须由用户明确确认后
+# 由 _handle_delete_confirmation 用代码确定性执行，LLM 无法直接删数据。
+PENDING_DELETES: dict = {}
+
+
+def _stage_delete_request(args: dict) -> dict:
+    """登记删除请求，不真正执行。返回 pending_confirm，提示 LLM 向用户确认。"""
+    try:
+        expense_id = int(args.get("expense_id"))
+    except (TypeError, ValueError):
+        return {"status": "error", "message": "缺少有效的 expense_id，删除请求未登记"}
+
+    with get_db() as conn:
+        record = conn.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,)).fetchone()
+    if not record:
+        return {"status": "not_found", "message": f"未找到 id={expense_id} 的花费记录，删除请求未登记"}
+
+    info = f"日期：{record['date']}，分类：{record['category']}，品牌：{record['brand'] or '无'}，金额：¥{record['amount']:.1f}，备注：{record['notes'] or '无'}"
+    PENDING_DELETES[record["id"]] = info
+    return {"status": "pending_confirm",
+            "message": f"删除请求已登记但【尚未执行】：{info}。"
+                       f"真正的删除只会在用户明确确认后由系统自动执行。"
+                       f"你必须向用户展示这条记录并询问是否确认删除，在用户确认前绝对不能声称已删除。"}
+
+
 def fn_update_expense(expense_id: int, date: str = None, category: str = None,
                       brand: str = None, amount: float = None, notes: str = None):
     """修改已有的花费记录。只更新用户明确提到的字段，未提到的保持不变。"""
@@ -1437,8 +1486,8 @@ def execute_function(name: str, args: dict) -> dict:
 
 # ===================== DeepSeek API =====================
 
-async def call_deepseek(messages: list) -> dict:
-    """调用 DeepSeek API，支持 Function Calling"""
+async def call_deepseek(messages: list, tool_choice: str = "auto") -> dict:
+    """调用 DeepSeek API，支持 Function Calling。tool_choice: auto|required|none"""
     if DEEPSEEK_API_KEY == "your-api-key-here":
         return {"role": "assistant", "content": "⚠️ 未配置 DeepSeek API Key。请在项目目录下创建 api_key.txt 文件写入你的 Key，或者设置环境变量 DEEPSEEK_API_KEY。"}
 
@@ -1451,7 +1500,7 @@ async def call_deepseek(messages: list) -> dict:
         "model": DEEPSEEK_MODEL,
         "messages": messages,
         "tools": FUNCTIONS,
-        "tool_choice": "auto",
+        "tool_choice": tool_choice,
         "temperature": 0.7,
         "max_tokens": 2000
     }
@@ -1543,6 +1592,273 @@ async def index():
     return HTMLResponse("<h1>前端文件未找到，请创建 static/index.html</h1>")
 
 
+def _auto_record_from_message(user_message: str) -> list:
+    """
+    从用户消息中自动检测花费/体重记录，直接写入数据库。
+    不依赖 LLM 函数调用 — 这是确定性代码，100% 保证写入成功。
+    返回已写入记录的描述列表。
+    """
+    today = date.today()
+    records = []
+
+    # ---- 日期解析 ----
+    def parse_date(ds: str) -> str:
+        """将 '6月18日' 或 '2026-06-18' 转为 '2026-06-18'"""
+        m = re.match(r'(\d{1,2})月(\d{1,2})[日号]?', ds)
+        if m:
+            month, day = int(m.group(1)), int(m.group(2))
+            year = today.year
+            # 如果月份比当前月份大很多（如12月 vs 6月），可能是去年
+            return f"{year}-{month:02d}-{day:02d}"
+        m2 = re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', ds)
+        if m2:
+            return f"{int(m2.group(1)):04d}-{int(m2.group(2)):02d}-{int(m2.group(3)):02d}"
+        return today.strftime('%Y-%m-%d')
+
+    # ---- 分类识别（基于关键词，医疗优先于零食避免「洁齿水」误判）----
+    def detect_category(text: str) -> str:
+        t = text.lower()
+        # 医疗要先于零食：洁齿水=医疗，洁齿粒=零食
+        if any(kw in t for kw in ['驱虫', '疫苗', '医保', '保险', '医院', '检查', '体检', '洁齿水', '拜达尔', '大宠爱', '海乐妙', '博莱恩', '福来恩']):
+            return '医疗'
+        if any(kw in t for kw in ['猫砂', '膨润土', '豆腐砂', '混合砂', '品之佳']):
+            return '猫砂'
+        if any(kw in t for kw in ['猫粮', '猫干粮', '皇家', '冠能', '宽幅', '海洋之星', '诚实一口', '荒野盛宴', '粮']):
+            return '猫粮'
+        if any(kw in t for kw in ['零食', '冻干', '洁齿粒', '猫条', '罐头', '咕噜酱', '羊奶', '小壳', '麦富迪']):
+            return '零食'
+        if any(kw in t for kw in ['玩具', '逗猫棒', '激光', '球', '老鼠']):
+            return '玩具'
+        if any(kw in t for kw in ['猫砂盆', '猫抓板', '猫碗', '猫包', '牵引绳', '梳子', '伊丽莎白', '猫砂铲', '湿巾', '喷雾', '费洛蒙', '垃圾袋']):
+            return '用品'
+        return '其他'
+
+    # ---- 品牌名清理 ----
+    def clean_brand(raw: str) -> str:
+        """去掉品牌名开头和结尾的标点符号"""
+        return re.sub(r'^[，,、。；;：:\s]+|[，,、。；;：:\s]+$', '', raw).strip()
+
+    def clean_item(raw: str) -> str:
+        """去掉物品描述开头/结尾的标点和多余空白"""
+        return re.sub(r'^[，,、。；;：:\s]+|[，,、。；;：:\s]+$', '', raw).strip()
+    def extract_amounts(text: str) -> list:
+        """提取所有 ¥XX 或 XX元 格式的金额，返回 (金额, 该金额附近20字符的上下文)"""
+        results = []
+        for m in re.finditer(r'(?:¥|￥)?(\d+\.?\d*)\s*元?', text):
+            amt = float(m.group(1))
+            if 0.5 < amt < 100000:  # 合理范围
+                ctx_start = max(0, m.start() - 30)
+                ctx_end = min(len(text), m.end() + 30)
+                ctx = text[ctx_start:ctx_end]
+                results.append((amt, ctx))
+        return results
+
+    # ---- 体重提取 ----
+    weight_patterns = [
+        r'体重\s*[:：]?\s*(\d+\.?\d*)\s*kg',
+        r'(\d+\.?\d*)\s*kg\s*[的，。]',
+        r'称[了重体重]*\s*[:：]?\s*(\d+\.?\d*)\s*kg',
+        r'体重[是是为有].*?(\d+\.?\d*)\s*kg',
+    ]
+    for pat in weight_patterns:
+        m = re.search(pat, user_message, re.IGNORECASE)
+        if m:
+            weight_val = float(m.group(1))
+            if 1.0 < weight_val < 50.0:
+                # 尝试提取日期
+                date_match = re.search(r'(\d{1,2})月(\d{1,2})[日号]?', user_message)
+                date_str = parse_date(date_match.group(0)) if date_match else today.strftime('%Y-%m-%d')
+                result = fn_add_weight_record(date=date_str, weight=weight_val)
+                records.append(f"体重: {date_str} {weight_val}kg → {result.get('status','?')}")
+                break
+            break
+
+    # ---- 花费记录：模式匹配 ----
+    # 模式1: "X月X日买了/买了XXX花了X元"
+    # 模式2: "X月X日 XXX X元"（简洁格式）
+    # 模式3: "记录：X月X日 XXX X元"
+
+    # 先按行拆分，逐行处理
+    lines = user_message.replace('，', '\n').replace(',', '\n').split('\n')
+
+    # 全局模式：匹配 "日期 + 项目 + 金额" 的组合
+    # 例: "6月18日买了皇家猫粮400g花了27元"
+    expense_pattern = re.compile(
+        r'(?:(\d{1,2}月\d{1,2}[日号]?)\s*)?'   # 可选日期
+        r'(?:买了|购买了|下单了?|消费了?|花了[钱]?)?'  # 可选动词
+        r'(.+?)'                                   # 项目名（尽量短匹配）
+        r'(?:花了?|花费|消费|用了|付款|价格[是为]?|金额[是为]?)\s*'  # 金额引导词
+        r'[¥￥]?(\d+\.?\d*)\s*元?',                # 金额
+    )
+
+    # 更宽松的模式: "X月X日项目名 Y元"（日期后空格可选）
+    loose_pattern = re.compile(
+        r'(\d{1,2}月\d{1,2}[日号]?)\s*'            # 日期（空格可选）
+        r'(\S.{1,30}?)\s+'                         # 项目名
+        r'[¥￥]?(\d+\.?\d*)\s*元',                  # 金额
+    )
+
+    # 先尝试宽松模式
+    for m in loose_pattern.finditer(user_message):
+        date_str = parse_date(m.group(1))
+        item_desc = clean_item(m.group(2))
+        amount = float(m.group(3))
+        if amount <= 0.5 or amount > 100000:
+            continue
+        category = detect_category(item_desc)
+        # 提取品牌（项目名开头的部分）
+        brand = clean_brand(item_desc[:20] if len(item_desc) > 20 else item_desc)
+        result = fn_add_expense(date=date_str, category=category, brand=brand, amount=amount, notes=item_desc)
+        records.append(f"花费: {date_str} {category} {brand} ¥{amount:.2f} → {result.get('status','?')}")
+        if result.get('status') == 'error':
+            records.append(f"  ⚠️ 错误详情: {result.get('message','')}")
+
+    # 模式3: "物品名 N元"（无动词，直接物品+价格，如"麦富迪冻干洁齿粒19.9元"）
+    simple_pattern = re.compile(r'(\S.{2,40}?)\s*[¥￥]?(\d+\.?\d*)\s*元')
+    for m in simple_pattern.finditer(user_message):
+        item_desc = clean_item(m.group(1))
+        amount = float(m.group(2))
+        # 过滤：排除日期行、纯数字、已匹配过的
+        if amount <= 0.5 or amount > 100000:
+            continue
+        if re.search(r'\d{1,2}月\d{1,2}[日号]', item_desc):  # 是日期前缀，不是物品名
+            continue
+        if len(item_desc) > 50:
+            continue
+        # 从上下文推断日期（取最近的前面出现的日期）
+        date_str = today.strftime('%Y-%m-%d')
+        date_ctx_match = re.search(r'(\d{1,2}月\d{1,2}[日号]?)', user_message[:m.start()])
+        if not date_ctx_match:
+            date_ctx_match = re.search(r'(\d{1,2}月\d{1,2}[日号]?)', user_message)
+        if date_ctx_match:
+            date_str = parse_date(date_ctx_match.group(1))
+        category = detect_category(item_desc)
+        brand = clean_brand(item_desc[:20] if len(item_desc) > 20 else item_desc)
+        result = fn_add_expense(date=date_str, category=category, brand=brand, amount=amount, notes=item_desc)
+        rec_str = f"花费: {date_str} {category} {brand} ¥{amount:.2f} → {result.get('status','?')}"
+        if rec_str not in records:
+            records.append(rec_str)
+
+    # 模式4: 标准动词模式（可能和上面重复但 fn_add_expense 有去重）
+    for m in expense_pattern.finditer(user_message):
+        date_str = parse_date(m.group(1)) if m.group(1) else today.strftime('%Y-%m-%d')
+        item_desc = clean_item(m.group(2))
+        amount = float(m.group(3))
+        if amount <= 0.5 or amount > 100000:
+            continue
+        if len(item_desc) > 50 or len(item_desc) < 1:
+            continue
+        category = detect_category(item_desc)
+        brand = clean_brand(item_desc[:25] if len(item_desc) > 25 else item_desc)
+        notes = item_desc
+        result = fn_add_expense(date=date_str, category=category, brand=brand, amount=amount, notes=notes)
+        rec_str = f"花费: {date_str} {category} {brand} ¥{amount:.2f} → {result.get('status','?')}"
+        if rec_str not in records:
+            records.append(rec_str)
+
+    return records
+
+
+def _strip_markdown(text: str) -> str:
+    """去掉 LLM 回复中的 markdown 格式标记（**bold** → bold 等）"""
+    import re as _re
+    # **bold** → bold
+    text = _re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    # *italic* → italic
+    text = _re.sub(r'\*(.+?)\*', r'\1', text)
+    # `code` → code
+    text = _re.sub(r'`(.+?)`', r'\1', text)
+    # ### heading → heading
+    text = _re.sub(r'^#{1,6}\s+', '', text, flags=_re.MULTILINE)
+    return text
+
+
+def _append_db_verification(reply: str, actions: list) -> str:
+    """在 LLM 回复末尾附加数据库真实数据，防止幻觉。仅当涉及数据查询时追加。"""
+    DATA_QUERY_FUNCTIONS = {'query_expenses', 'query_weight_trend', 'query_events', 'query_inventory',
+                            'query_toys', 'get_trend_chart', 'search_expense', 'check_reminders'}
+    has_query = bool(set(actions) & DATA_QUERY_FUNCTIONS)
+    if not has_query:
+        return reply
+
+    # 查询数据库实际数据
+    from collections import defaultdict
+    with get_db() as conn:
+        all_exp = conn.execute("SELECT date, amount FROM expenses ORDER BY date").fetchall()
+        by_month = defaultdict(float)
+        for r in all_exp:
+            by_month[r["date"][:7]] += r["amount"]
+        total_exp = sum(by_month.values())
+
+        last_weight = conn.execute(
+            "SELECT date, weight FROM weight_records ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+
+    # 生成校验脚注
+    month_lines = " | ".join(f"{m}: ¥{v:.2f}" for m, v in sorted(by_month.items()))
+    footer = f"\n\n📊 数据库实际记录：{month_lines}\n💰 真实总开销：¥{total_exp:.2f}"
+    if last_weight:
+        footer += f"\n⚖️ 最近体重：{last_weight['weight']}kg（{last_weight['date']}）"
+
+    return reply + footer
+
+
+def _extract_delete_ids(user_message: str) -> list:
+    """从用户消息中提取明确的记录ID：如「删125」「删除ID 125」。提取不到返回空列表。"""
+    ids = []
+    for m in re.finditer(r'(?<![A-Za-z0-9])ID\s*[:：]?\s*(\d{1,6})', user_message, re.IGNORECASE):
+        ids.append(int(m.group(1)))
+    for m in re.finditer(r'删(?:除|掉|去)?(?:一下)?(?:记录|这条|那条|这笔)?\s*(\d{1,6})(?!月|日|号|\.|元|块)', user_message):
+        ids.append(int(m.group(1)))
+    return list(dict.fromkeys(ids))
+
+
+def _is_delete_confirm(user_message: str) -> bool:
+    """判断用户消息是否为「确认删除」：简短确认词，或确认词+删除语境。
+    注意：像「删掉8月7日重复的洗澡记录」这种首次删除请求不算确认。"""
+    bare = user_message.strip().rstrip('。！!？?，,、.~～').lower()
+    bare_confirms = {'确认', '确定', '是的', '对', '好', '好的', '嗯', '没错', '可以', '行',
+                     'ok', '删吧', '删除吧', '确认删除', '确定删除', '没问题', '删除'}
+    if bare in bare_confirms:
+        return True
+    if re.search(r'删', user_message) and re.search(r'确认|确定|可以|没问题|好的|对|行吧|删吧', user_message):
+        return True
+    return False
+
+
+def _handle_delete_confirmation(user_message: str) -> str:
+    """删除操作的确定性执行（LLM 只能登记，真正删除必须由用户明确指令/确认后由本函数执行）。
+    返回执行结果通知文本；无操作时返回空字符串。"""
+    # 取消删除
+    if re.search(r'不删|别删|取消删除|先不删|不用删', user_message):
+        had = bool(PENDING_DELETES)
+        PENDING_DELETES.clear()
+        return "用户取消了删除，已清除待确认的删除请求。" if had else ""
+
+    # 1) 用户消息带明确记录ID的删除指令：直接执行
+    direct_ids = _extract_delete_ids(user_message)
+    if direct_ids:
+        lines = []
+        for eid in direct_ids:
+            res = fn_delete_expense(eid, confirmed=True)
+            lines.append(res.get("message", str(res)))
+        PENDING_DELETES.clear()
+        return "\n".join(lines)
+
+    # 2) 用户确认了待确认的删除请求：执行所有已登记记录
+    if PENDING_DELETES and _is_delete_confirm(user_message):
+        lines = []
+        for eid in list(PENDING_DELETES):
+            res = fn_delete_expense(eid, confirmed=True)
+            lines.append(res.get("message", str(res)))
+        PENDING_DELETES.clear()
+        return "\n".join(lines)
+
+    # 3) 其他消息：清空陈旧的待确认请求，避免之后误删
+    PENDING_DELETES.clear()
+    return ""
+
+
 @app.post("/chat")
 async def chat(request: Request):
     """核心对话接口"""
@@ -1553,18 +1869,68 @@ async def chat(request: Request):
     if not user_message.strip():
         return JSONResponse({"reply": "请说点什么吧~", "history": history})
 
+    # 检测用户消息是否涉及数据记录（花费/体重/事件/库存），强制调用函数
+    record_keywords = [
+        # 花费相关
+        "花了", "买了", "消费", "开销", "记一笔", "记录.*花", "账单", "购物",
+        "¥", "元", "多少钱", "付款", "下单", "购买", "买了.*花了",
+        # 体重相关
+        "体重", "称了", ".*kg", "公斤", ".*斤",
+        # 事件相关
+        "疫苗", "驱虫", "绝育", "体检", "提醒.*打", "打.*疫苗",
+        # 库存相关
+        "库存", "还剩.*猫粮", "猫砂.*还有", "快用完了"
+    ]
+    needs_record = any(re.search(kw, user_message) for kw in record_keywords)
+    tool_choice = "required" if needs_record else "auto"
+
+    # 🔑 核心修复：直接从用户消息中提取花费/体重，绕过 LLM 直接写入数据库
+    # 这样 LLM 是否调用函数都不影响数据写入 — 数据是确定性代码写入的
+    # 删除类消息跳过自动记账，避免把「删掉8月7日39.9元那条记录」误当成新花费写入
+    is_delete_msg = bool(re.search(r'删(?:除|掉|去)?', user_message))
+    has_add_intent = bool(re.search(r'买了|花了|消费|记一笔|记录了|购入', user_message))
+    auto_records = [] if (is_delete_msg and not has_add_intent) else _auto_record_from_message(user_message)
+
+    # 删除确定性执行：用户明确指令（删125/删除ID 125）或确认已登记的删除请求时，由代码直接删库
+    delete_notice = _handle_delete_confirmation(user_message)
+    if delete_notice:
+        tool_choice = "none"  # 删除已由代码执行，LLM 只需如实汇报，不再调用函数
+
+    # 如果自动记录了数据或执行了删除，注入到消息中让 LLM 知晓
+    notices = []
+    if auto_records:
+        record_summary = "以下数据已自动写入数据库（无需你再调用函数写入）：\n" + "\n".join(auto_records)
+        notices.append("已自动从用户消息中提取并写入以下数据到数据库：\n" + record_summary)
+    if delete_notice:
+        notices.append("系统已按用户指令执行删除相关操作，结果如下（你无需再调用任何删除函数，直接根据结果如实回复用户即可）：\n" + delete_notice)
+    if notices:
+        augmented_message = "[系统通知]\n" + "\n\n".join(notices) + f"\n\n用户原始消息：{user_message}"
+    else:
+        augmented_message = user_message
+
     system_prompt = build_system_prompt()
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
-    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": augmented_message})
 
     # 最多 3 轮 function calling，跟踪所有执行过的函数
     max_rounds = 3
+    # 把 auto_record 的动作预先加入 actions，确保 data_changed 正确触发前端刷新
     actions = []
+    if auto_records:
+        for r in auto_records:
+            if r.startswith('花费:'):
+                actions.append('add_expense')
+            elif r.startswith('体重:'):
+                actions.append('add_weight_record')
+    if delete_notice and '已成功删除' in delete_notice:
+        actions.append('delete_expense')
     WRITE_FUNCTIONS = {'add_expense', 'add_event', 'add_weight_record', 'set_toy_preference',
                        'update_inventory', 'delete_expense', 'update_expense', 'update_cat_info'}
-    for _ in range(max_rounds):
-        response = await call_deepseek(messages)
+    for round_idx in range(max_rounds):
+        # 第一轮使用检测到的 tool_choice，后续轮次用 auto（允许自由回复）
+        current_tool_choice = tool_choice if round_idx == 0 else "auto"
+        response = await call_deepseek(messages, current_tool_choice)
         choice = response.get("choices", [{}])[0] if "choices" in response else response
 
         if "choices" not in response:
@@ -1588,26 +1954,47 @@ async def chat(request: Request):
                     fn_args = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     fn_args = {}
-                fn_result = execute_function(fn_name, fn_args)
-                actions.append(fn_name)
+                if fn_name == "delete_expense":
+                    # LLM 只能登记删除请求，真正删除必须由用户确认后由代码执行
+                    fn_result = _stage_delete_request(fn_args)
+                else:
+                    fn_result = execute_function(fn_name, fn_args)
+                    actions.append(fn_name)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "content": json.dumps(fn_result, ensure_ascii=False)
                 })
+
+            # 用户消息本身已是确认（如「确认」）且 LLM 已登记删除请求 → 立即由代码执行删除
+            if PENDING_DELETES and _is_delete_confirm(user_message):
+                lines = []
+                for eid in list(PENDING_DELETES):
+                    res = fn_delete_expense(eid, confirmed=True)
+                    lines.append(res.get("message", str(res)))
+                PENDING_DELETES.clear()
+                exec_notice = ("系统已按用户的确认执行删除，结果如下（请直接根据结果如实回复用户，不要再调用任何函数）：\n"
+                               + "\n".join(lines))
+                messages.append({"role": "user", "content": f"[系统通知]\n{exec_notice}"})
+                actions.append('delete_expense')
+                break  # 跳出工具循环，用最终回复告知用户结果
         else:
             # 纯文本回复
-            assistant_msg = {"role": "assistant", "content": msg.get("content", "")}
+            reply_text = msg.get("content", "")
+            reply_text = _append_db_verification(_strip_markdown(reply_text), actions)
+            assistant_msg = {"role": "assistant", "content": reply_text}
             history.append({"role": "user", "content": user_message})
             history.append(assistant_msg)
-            return JSONResponse({"reply": msg.get("content", ""), "history": history,
+            return JSONResponse({"reply": reply_text, "history": history,
                                  "actions": actions,
                                  "data_changed": bool(set(actions) & WRITE_FUNCTIONS)})
 
-    # 达到最大轮次，最后再请求一次总结
-    final_response = await call_deepseek(messages)
+    # 达到最大轮次，最后再请求一次总结（用 auto 模式，允许自由回复）
+    final_response = await call_deepseek(messages, "auto")
     final_choice = final_response.get("choices", [{}])[0] if "choices" in final_response else {}
     final_content = final_choice.get("message", {}).get("content", "处理中...")
+    # 附加数据库真实数据校验（防止 LLM 幻觉）
+    final_content = _append_db_verification(_strip_markdown(final_content), actions)
     assistant_msg = {"role": "assistant", "content": final_content}
     history.append({"role": "user", "content": user_message})
     history.append(assistant_msg)
